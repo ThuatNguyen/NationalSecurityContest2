@@ -7,6 +7,7 @@ This web application digitizes and streamlines the evaluation process for the Vi
 Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
+- **November 19, 2025:** Successfully set up the project in Replit environment. Configured Vite for Replit proxy compatibility with host 0.0.0.0 and HMR over WSS. Pushed database schema to PostgreSQL. Configured workflow to run on port 5000. Set up deployment configuration with autoscale target using npm build and node start commands.
 - **November 18, 2025:** Added detailed criteria matrix table to Reports page showing unit-by-criteria scores with multi-level headers. Table displays all leaf criteria (TC1, TC2, TC3...) with ĐTC (self-score) and TĐ (cluster review score) sub-columns. Integrated into both interactive view and print layout. Backend ensures all cluster units appear even without scores (showing "-" for missing values). Added Excel export functionality with properly formatted multi-level headers matching the table structure.
 
 ## System Architecture
@@ -48,3 +49,23 @@ Preferred communication style: Simple, everyday language.
 - **UI Components:** `@radix-ui/*`, `class-variance-authority`, `tailwindcss`, `lucide-react`, `shadcn/ui`.
 - **Form Handling:** `react-hook-form`, `@hookform/resolvers`, `zod`.
 - **Excel Generation:** `exceljs`.
+
+## Replit Environment Setup
+### Development Configuration
+- **Port:** 5000 (frontend and backend both served by Express)
+- **Workflow:** "Start application" runs `npm run dev`
+- **Vite Configuration:** Configured with host 0.0.0.0, HMR over WSS (clientPort 443), and protocol wss for Replit proxy compatibility
+- **Database:** PostgreSQL database available via DATABASE_URL environment variable
+- **Session Secret:** SESSION_SECRET environment variable is configured
+
+### Production Deployment
+- **Deployment Target:** Autoscale (stateless web application)
+- **Build Command:** `npm run build` (builds Vite frontend and bundles server with esbuild)
+- **Run Command:** `node dist/index.js`
+- **Build Output:** Frontend in `dist/public`, server in `dist/index.js`
+
+### Environment Variables Required
+- `DATABASE_URL`: PostgreSQL connection string (auto-configured in Replit)
+- `SESSION_SECRET`: Session encryption secret (auto-configured in Replit)
+- `NODE_ENV`: Set to "development" or "production"
+- `PORT`: Server port (defaults to 5000)
