@@ -47,6 +47,7 @@ interface Criteria {
   selfScore?: number;
   calculatedScore?: number;
   actualValue?: number;
+  targetValue?: number; // Chỉ tiêu được giao (cho tiêu chí định lượng)
   evidenceFile?: string | null; // Đường dẫn server (không hiển thị)
   evidenceFileName?: string | null; // Tên file gốc (hiển thị cho user)
   note?: string | null;
@@ -767,6 +768,49 @@ export default function EvaluationPeriods() {
     return total;
   };
 
+  // Format criteria name with result info for Type 1 (Quantitative) and Type 2 (Qualitative)
+  const formatCriteriaNameWithResult = (item: Criteria): JSX.Element => {
+    const baseName = item.name;
+    
+    // Only add result info for leaf nodes (criteriaType 1-4)
+    if (item.criteriaType === 0) {
+      return <span>{baseName}</span>;
+    }
+    
+    // Type 1: Định lượng (Quantitative)
+    if (item.criteriaType === 1 && (item.targetValue !== undefined || item.actualValue !== undefined)) {
+      const T = item.targetValue !== undefined && item.targetValue !== null ? item.targetValue : '?';
+      const A = item.actualValue !== undefined && item.actualValue !== null ? item.actualValue : '?';
+      
+      return (
+        <span>
+          {baseName}
+          {(T !== '?' || A !== '?') && (
+            <span className="text-xs text-muted-foreground ml-2">
+              (T: {T}, A: {A})
+            </span>
+          )}
+        </span>
+      );
+    }
+    
+    // Type 2: Định tính (Qualitative)
+    if (item.criteriaType === 2 && item.selfScore !== undefined && item.selfScore !== null) {
+      const achieved = Number(item.selfScore) > 0;
+      return (
+        <span>
+          {baseName}
+          <span className={`text-xs ml-2 ${achieved ? 'text-green-600' : 'text-gray-500'}`}>
+            ({achieved ? 'Đạt' : 'Chưa đạt'})
+          </span>
+        </span>
+      );
+    }
+    
+    // Type 3, 4 or no data: Just show name
+    return <span>{baseName}</span>;
+  };
+
   // Render permission check
   const canReview1 = user?.role === "admin" || user?.role === "cluster_leader";
   const canReview2 = user?.role === "admin";
@@ -1259,7 +1303,7 @@ export default function EvaluationPeriods() {
                                         : "font-medium"
                                     }
                                   >
-                                    {item.name}
+                                    {formatCriteriaNameWithResult(item)}
                                   </span>
                                 </td>
                                 <td
@@ -1468,6 +1512,16 @@ export default function EvaluationPeriods() {
                 </tbody>
               </table>
             </div>
+            
+            {/* Chú thích các ký tự viết tắt */}
+            <div className="mt-4 p-3 bg-muted/50 border rounded-md text-sm">
+              <div className="font-semibold mb-2 text-foreground">Chú thích:</div>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <div><span className="font-medium text-foreground">T:</span> Chỉ tiêu (Target) - Chỉ tiêu được giao cho đơn vị (áp dụng cho tiêu chí định lượng)</div>
+                <div><span className="font-medium text-foreground">A:</span> Thực hiện (Actual) - Kết quả thực tế đơn vị đạt được (áp dụng cho tiêu chí định lượng)</div>
+                <div><span className="font-medium text-foreground">Đạt/Chưa đạt:</span> Trạng thái hoàn thành tiêu chí định tính</div>
+              </div>
+            </div>
           </div>
 
           {/* Submit Confirmation Dialog */}
@@ -1624,7 +1678,7 @@ export default function EvaluationPeriods() {
                         style={{ paddingLeft: `${indentPx}px` }}
                       >
                         <span className={indentLevel > 0 ? "" : "font-medium"}>
-                          {item.name}
+                          {formatCriteriaNameWithResult(item)}
                         </span>
                       </td>
                       <td className="border px-2 py-2 text-sm text-center font-medium">
@@ -1668,6 +1722,16 @@ export default function EvaluationPeriods() {
               })}
             </tbody>
           </table>
+          
+          {/* Chú thích các ký tự viết tắt */}
+          <div className="mt-4 p-3 bg-gray-50 border rounded-md text-sm">
+            <div className="font-semibold mb-2">Chú thích:</div>
+            <div className="space-y-1 text-xs">
+              <div><span className="font-medium">T:</span> Chỉ tiêu (Target) - Chỉ tiêu được giao cho đơn vị (áp dụng cho tiêu chí định lượng)</div>
+              <div><span className="font-medium">A:</span> Thực hiện (Actual) - Kết quả thực tế đơn vị đạt được (áp dụng cho tiêu chí định lượng)</div>
+              <div><span className="font-medium">Đạt/Chưa đạt:</span> Trạng thái hoàn thành tiêu chí định tính</div>
+            </div>
+          </div>
         </div>
       )}
     </div>

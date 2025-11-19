@@ -825,11 +825,24 @@ export class DatabaseStorage implements IStorage {
     // Get all criteria results (new system) for this period+unit
     const criteriaResults = await this.getCriteriaResults(periodId, unitId);
     const resultsMap = new Map(criteriaResults.map(r => [r.criteriaId, r]));
+    
+    // Get all criteria targets for this period+unit
+    const criteriaTargets = await db
+      .select()
+      .from(schema.criteriaTargets)
+      .where(
+        and(
+          eq(schema.criteriaTargets.periodId, periodId),
+          eq(schema.criteriaTargets.unitId, unitId)
+        )
+      );
+    const targetsMap = new Map(criteriaTargets.map(t => [t.criteriaId, t]));
 
     // Transform tree into flat groups by level 1 nodes
     const flattenTree = (node: any, parentPath: string = '', parentNodeId: string | null = null): any[] => {
       const currentPath = parentPath ? `${parentPath}.${node.orderIndex}` : node.code || node.id.substring(0, 8);
       const result = resultsMap.get(node.id);
+      const target = targetsMap.get(node.id);
 
       const flatNode = {
         id: node.id,
@@ -844,6 +857,7 @@ export class DatabaseStorage implements IStorage {
         selfScore: result?.selfScore ? parseFloat(result.selfScore) : undefined,
         calculatedScore: result?.calculatedScore ? parseFloat(result.calculatedScore) : undefined,
         actualValue: result?.actualValue ? parseFloat(result.actualValue) : undefined,
+        targetValue: target?.targetValue ? parseFloat(target.targetValue) : undefined, // Add target value
         evidenceFile: result?.evidenceFile || null,
         evidenceFileName: result?.evidenceFileName || null, // Display name for evidence file
         note: result?.note || null,
