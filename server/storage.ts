@@ -103,7 +103,12 @@ export interface IStorage {
       unitId: string;
       unitShortName: string;
       unitName: string;
-      scoresByCriteria: Record<string, { selfScore: number | null; clusterScore: number | null }>;
+      scoresByCriteria: Record<string, { 
+        selfScore: number | null; 
+        clusterScore: number | null;
+        isAssigned: boolean; // Tiêu chí có được giao cho đơn vị này không (user-declared)
+        hasResult: boolean; // Đã chấm điểm hay chưa
+      }>;
     }>;
   }>;
   
@@ -857,7 +862,7 @@ export class DatabaseStorage implements IStorage {
         selfScore: result?.selfScore ? parseFloat(result.selfScore) : undefined,
         calculatedScore: result?.calculatedScore ? parseFloat(result.calculatedScore) : undefined,
         actualValue: result?.actualValue ? parseFloat(result.actualValue) : undefined,
-        targetValue: target?.targetValue ? parseFloat(target.targetValue) : undefined, // Add target value
+        targetValue: target?.targetValue !== null && target?.targetValue !== undefined ? parseFloat(target.targetValue) : undefined, // Add target value (handle 0)
         evidenceFile: result?.evidenceFile || null,
         evidenceFileName: result?.evidenceFileName || null, // Display name for evidence file
         note: result?.note || null,
@@ -1038,26 +1043,60 @@ export class DatabaseStorage implements IStorage {
           )
       : [];
 
+    // 5.1 Get criteria targets to check if unit has target assigned
+    const criteriaTargets = unitIds.length > 0 && criteriaIds.length > 0
+      ? await db
+          .select()
+          .from(schema.criteriaTargets)
+          .where(
+            and(
+              eq(schema.criteriaTargets.periodId, periodId),
+              inArray(schema.criteriaTargets.unitId, unitIds),
+              inArray(schema.criteriaTargets.criteriaId, criteriaIds)
+            )
+          )
+      : [];
+
+    // Build map: unitId+criteriaId -> targetValue
+    const targetMap = new Map<string, number>();
+    criteriaTargets.forEach(target => {
+      const key = `${target.unitId}_${target.criteriaId}`;
+      targetMap.set(key, parseFloat(target.targetValue));
+    });
+
     // 6. Group scores by unit - include ALL units even if they have no scores
     const unitsData = units.map(unit => {
-      const scoresByCriteria: Record<string, { selfScore: number | null; clusterScore: number | null }> = {};
+      const scoresByCriteria: Record<string, { 
+        selfScore: number | null; 
+        clusterScore: number | null;
+        isAssigned: boolean;
+        hasResult: boolean; // Đã chấm điểm hay chưa
+      }> = {};
       
-      // Pre-fill all criteria with null scores, then override with actual results if they exist
+      // Pre-fill all criteria with null scores
       leafCriteria.forEach(criteria => {
         scoresByCriteria[criteria.id] = {
           selfScore: null,
           clusterScore: null,
+          isAssigned: true, // Default: assumed assigned
+          hasResult: false, // Chưa chấm
         };
       });
 
-      // Override with actual scores where they exist
+      // Override with actual results where they exist
       criteriaResults.forEach(result => {
         if (result.unitId === unit.id && scoresByCriteria[result.criteriaId]) {
-          scoresByCriteria[result.criteriaId] = {
-            // selfScore = calculatedScore (điểm đơn vị tự tính, bao gồm cả định lượng và định tính)
-            selfScore: result.calculatedScore ? parseFloat(result.calculatedScore) : null,
-            clusterScore: result.clusterScore ? parseFloat(result.clusterScore) : null,
-          };
+          scoresByCriteria[result.criteriaId].selfScore = result.calculatedScore ? parseFloat(result.calculatedScore) : null;
+          scoresByCriteria[result.criteriaId].clusterScore = result.clusterScore ? parseFloat(result.clusterScore) : null;
+          scoresByCriteria[result.criteriaId].hasResult = true; // Có kết quả rồi
+          
+          // Check nếu không được giao: actualValue > 0 NHƯNG targetValue = 0 hoặc null
+          const targetKey = `${result.unitId}_${result.criteriaId}`;
+          const targetValue = targetMap.get(targetKey) || 0;
+          const actualValue = result.actualValue ? parseFloat(result.actualValue) : 0;
+          const hasActualButNoTarget = actualValue > 0 && targetValue === 0;
+          
+          scoresByCriteria[result.criteriaId].isAssigned = !hasActualButNoTarget;
         }
       });
 

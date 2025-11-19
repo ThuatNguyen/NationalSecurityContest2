@@ -15,7 +15,12 @@ interface CriteriaMatrixData {
     unitId: string;
     unitShortName: string;
     unitName: string;
-    scoresByCriteria: Record<string, { selfScore: number | null; clusterScore: number | null }>;
+    scoresByCriteria: Record<string, { 
+      selfScore: number | null; 
+      clusterScore: number | null;
+      isAssigned: boolean; // Tiêu chí có được giao cho đơn vị không (user-declared)
+      hasResult: boolean; // Đã chấm điểm hay chưa
+    }>;
   }>;
 }
 
@@ -175,16 +180,49 @@ export function CriteriaMatrixTable({ data, periodId, clusterId }: CriteriaMatri
                   </td>
                   {criteriaHierarchy.flatMap(criteria => {
                     const scores = unit.scoresByCriteria[criteria.id];
+                    const hasResult = scores?.hasResult === true; // Đã chấm điểm
+                    const isAssigned = scores?.isAssigned !== false; // Được giao
+                    
+                    // CHỈ hiển thị màu cam + ⊘ khi: ĐÃ CHẤM và KHÔNG ĐƯỢC GIAO
+                    const shouldMarkNotAssigned = hasResult && !isAssigned;
+                    
+                    // Styling for not assigned criteria (chỉ khi đã chấm)
+                    const notAssignedStyle = shouldMarkNotAssigned
+                      ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400" 
+                      : "";
+                    
                     return [
-                      <td key={`self-${unit.unitId}-${criteria.id}`} className="border border-border px-2 py-1 text-center">
-                        {scores?.selfScore !== null && scores?.selfScore !== undefined 
-                          ? scores.selfScore.toFixed(1) 
-                          : "-"}
+                      <td 
+                        key={`self-${unit.unitId}-${criteria.id}`} 
+                        className={`border border-border px-2 py-1 text-center relative ${notAssignedStyle}`}
+                        title={shouldMarkNotAssigned ? "Đơn vị không được giao tiêu chí này" : undefined}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {shouldMarkNotAssigned && (
+                            <span className="text-orange-600 dark:text-orange-400 font-bold" title="Không được giao">⊘</span>
+                          )}
+                          <span>
+                            {scores?.selfScore !== null && scores?.selfScore !== undefined 
+                              ? scores.selfScore.toFixed(1) 
+                              : "-"}
+                          </span>
+                        </div>
                       </td>,
-                      <td key={`cluster-${unit.unitId}-${criteria.id}`} className="border border-border px-2 py-1 text-center">
-                        {scores?.clusterScore !== null && scores?.clusterScore !== undefined 
-                          ? scores.clusterScore.toFixed(1) 
-                          : "-"}
+                      <td 
+                        key={`cluster-${unit.unitId}-${criteria.id}`} 
+                        className={`border border-border px-2 py-1 text-center relative ${notAssignedStyle}`}
+                        title={shouldMarkNotAssigned ? "Đơn vị không được giao tiêu chí này" : undefined}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {shouldMarkNotAssigned && (
+                            <span className="text-orange-600 dark:text-orange-400 font-bold" title="Không được giao">⊘</span>
+                          )}
+                          <span>
+                            {scores?.clusterScore !== null && scores?.clusterScore !== undefined 
+                              ? scores.clusterScore.toFixed(1) 
+                              : "-"}
+                          </span>
+                        </div>
                       </td>
                     ];
                   })}
@@ -198,6 +236,11 @@ export function CriteriaMatrixTable({ data, periodId, clusterId }: CriteriaMatri
         <div className="border-t border-border p-4 text-xs text-muted-foreground space-y-1">
           <p><strong>ĐTC:</strong> Điểm tự chấm</p>
           <p><strong>TĐ:</strong> Điểm thẩm định (cluster review score)</p>
+          <p className="flex items-center gap-1">
+            <span className="text-orange-600 dark:text-orange-400 font-bold">⊘</span>
+            <span><strong>Dấu này:</strong> Đơn vị tự khai báo tiêu chí không được giao (ô có màu cam nhạt)</span>
+          </p>
+          <p><strong>-:</strong> Chưa chấm điểm</p>
           <p><strong>Ghi chú:</strong> Hover vào mã tiêu chí (TC1, TC2...) để xem tên đầy đủ</p>
         </div>
       </CardContent>

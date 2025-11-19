@@ -690,8 +690,25 @@ export default function EvaluationPeriods() {
 
   // Calculate overall totals
   const calculateOverallTotal = (field: keyof Criteria) => {
+    if (!summary?.criteriaGroups) return 0;
+    
+    // Đối với maxScore: CHỈ tính tiêu chí gốc (parentId = null)
+    if (field === "maxScore") {
+      let total = 0;
+      summary.criteriaGroups.forEach((group) => {
+        // Chỉ lấy tiêu chí có parentId = null (tiêu chí gốc nhất)
+        const rootCriteria = group.criteria.find(c => !c.parentId || c.parentId === null);
+        if (rootCriteria) {
+          const value = rootCriteria[field] as number || 0;
+          total += value;
+        }
+      });
+      return total;
+    }
+    
+    // Các cột điểm khác: tính tổng tất cả như cũ
     return (
-      summary?.criteriaGroups.reduce((sum, group) => {
+      summary.criteriaGroups.reduce((sum, group) => {
         return sum + calculateGroupTotal(group.criteria, field);
       }, 0) || 0
     );
@@ -779,8 +796,14 @@ export default function EvaluationPeriods() {
     
     // Type 1: Định lượng (Quantitative)
     if (item.criteriaType === 1 && (item.targetValue !== undefined || item.actualValue !== undefined)) {
-      const T = item.targetValue !== undefined && item.targetValue !== null ? item.targetValue : '?';
-      const A = item.actualValue !== undefined && item.actualValue !== null ? item.actualValue : '?';
+      const hasTarget = item.targetValue !== undefined && item.targetValue !== null && item.targetValue > 0;
+      const hasActual = item.actualValue !== undefined && item.actualValue !== null;
+      
+      const T = hasTarget ? item.targetValue : '?';
+      const A = hasActual ? item.actualValue : '?';
+      
+      // Đơn vị KHÔNG được giao chỉ tiêu: T=0 hoặc null nhưng CÓ kết quả
+      const isNoTargetButHasResult = !hasTarget && hasActual && Number(item.actualValue) > 0;
       
       return (
         <span>
@@ -788,6 +811,11 @@ export default function EvaluationPeriods() {
           {(T !== '?' || A !== '?') && (
             <span className="text-xs text-muted-foreground ml-2">
               (T: {T}, A: {A})
+              {isNoTargetButHasResult && (
+                <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                  Không giao CT
+                </span>
+              )}
             </span>
           )}
         </span>
@@ -1520,6 +1548,12 @@ export default function EvaluationPeriods() {
                 <div><span className="font-medium text-foreground">T:</span> Chỉ tiêu (Target) - Chỉ tiêu được giao cho đơn vị (áp dụng cho tiêu chí định lượng)</div>
                 <div><span className="font-medium text-foreground">A:</span> Thực hiện (Actual) - Kết quả thực tế đơn vị đạt được (áp dụng cho tiêu chí định lượng)</div>
                 <div><span className="font-medium text-foreground">Đạt/Chưa đạt:</span> Trạng thái hoàn thành tiêu chí định tính</div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                    Không giao CT
+                  </span>
+                  <span>Đơn vị không được giao chỉ tiêu nhưng có kết quả. Điểm tính theo tỷ lệ so với đơn vị có kết quả cao nhất cùng nhóm (tối đa 100% điểm).</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1730,6 +1764,12 @@ export default function EvaluationPeriods() {
               <div><span className="font-medium">T:</span> Chỉ tiêu (Target) - Chỉ tiêu được giao cho đơn vị (áp dụng cho tiêu chí định lượng)</div>
               <div><span className="font-medium">A:</span> Thực hiện (Actual) - Kết quả thực tế đơn vị đạt được (áp dụng cho tiêu chí định lượng)</div>
               <div><span className="font-medium">Đạt/Chưa đạt:</span> Trạng thái hoàn thành tiêu chí định tính</div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                  Không giao CT
+                </span>
+                <span>Đơn vị không được giao chỉ tiêu nhưng có kết quả. Điểm tính theo tỷ lệ so với đơn vị có kết quả cao nhất cùng nhóm (tối đa 100% điểm).</span>
+              </div>
             </div>
           </div>
         </div>

@@ -508,13 +508,25 @@ export default function Reports() {
                       </td>
                       {matrixData.criteriaHierarchy.flatMap((criteria: typeof matrixData.criteriaHierarchy[0]) => {
                         const scores = unit.scoresByCriteria[criteria.id];
+                        const hasResult = scores?.hasResult === true;
+                        const isAssigned = scores?.isAssigned !== false;
+                        const shouldMarkNotAssigned = hasResult && !isAssigned;
+                        
                         return [
-                          <td key={`print-self-${unit.unitId}-${criteria.id}`} className="border px-1 py-1 text-center">
+                          <td 
+                            key={`print-self-${unit.unitId}-${criteria.id}`} 
+                            className={`border px-1 py-1 text-center ${shouldMarkNotAssigned ? 'bg-orange-100' : ''}`}
+                          >
+                            {shouldMarkNotAssigned && '⊘ '}
                             {scores?.selfScore !== null && scores?.selfScore !== undefined 
                               ? scores.selfScore.toFixed(1) 
                               : "-"}
                           </td>,
-                          <td key={`print-cluster-${unit.unitId}-${criteria.id}`} className="border px-1 py-1 text-center">
+                          <td 
+                            key={`print-cluster-${unit.unitId}-${criteria.id}`} 
+                            className={`border px-1 py-1 text-center ${shouldMarkNotAssigned ? 'bg-orange-100' : ''}`}
+                          >
+                            {shouldMarkNotAssigned && '⊘ '}
                             {scores?.clusterScore !== null && scores?.clusterScore !== undefined 
                               ? scores.clusterScore.toFixed(1) 
                               : "-"}
@@ -527,6 +539,7 @@ export default function Reports() {
                 </table>
                 <div className="mt-2 text-xs">
                   <p><strong>ĐTC:</strong> Điểm tự chấm | <strong>TĐ:</strong> Điểm thẩm định</p>
+                  <p><strong>⊘:</strong> Đơn vị không được giao tiêu chí (ô màu cam) | <strong>-:</strong> Chưa chấm điểm</p>
                 </div>
               </div>
             );

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Upload, X, FileText, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -20,7 +21,7 @@ interface ScoringModalProps {
   currentActualValue?: number;
   onSave: (data: {
     score?: number;
-    file?: File | null;
+    file?: File;
     targetValue?: number;
     actualValue?: number;
     achieved?: boolean;
@@ -78,8 +79,8 @@ export default function ScoringModal({
   // NOTE: This is a simplified preview. Full score requires leader detection across all units.
   useEffect(() => {
     if (criteriaType === 1) {
-      const target = parseFloat(targetValue);
       const actual = parseFloat(actualValue);
+      const target = parseFloat(targetValue);
       
       if (!isNaN(target) && target > 0 && !isNaN(actual) && actual >= 0) {
         let calculated: number;
@@ -133,15 +134,16 @@ export default function ScoringModal({
     // Validate based on criteria type
     if (criteriaType === 1) {
       // Định lượng: Validate target and actual
-      const target = parseFloat(targetValue);
       const actual = parseFloat(actualValue);
       
-      if (!targetValue || isNaN(target) || target <= 0) {
-        newErrors.targetValue = "Vui lòng nhập chỉ tiêu hợp lệ (> 0)";
-      }
-      
+      // Validate actual value (always required)
       if (!actualValue || isNaN(actual) || actual < 0) {
         newErrors.actualValue = "Vui lòng nhập kết quả thực hiện (≥ 0)";
+      }
+      
+      const target = parseFloat(targetValue);
+      if (!targetValue || isNaN(target) || target <= 0) {
+        newErrors.targetValue = "Vui lòng nhập chỉ tiêu hợp lệ (> 0)";
       }
       
       if (Object.keys(newErrors).length > 0) {

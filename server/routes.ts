@@ -2680,16 +2680,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         matrixData.criteriaHierarchy.forEach(criteria => {
           const scores = unit.scoresByCriteria[criteria.id];
-          rowData.push(
-            scores?.selfScore !== null && scores?.selfScore !== undefined 
-              ? scores.selfScore.toFixed(1) 
-              : "-"
-          );
-          rowData.push(
-            scores?.clusterScore !== null && scores?.clusterScore !== undefined 
-              ? scores.clusterScore.toFixed(1) 
-              : "-"
-          );
+          const hasResult = scores?.hasResult === true;
+          const isAssigned = scores?.isAssigned !== false;
+          const shouldMarkNotAssigned = hasResult && !isAssigned;
+          
+          const selfScoreValue = scores?.selfScore !== null && scores?.selfScore !== undefined 
+            ? scores.selfScore.toFixed(1) 
+            : "-";
+          const clusterScoreValue = scores?.clusterScore !== null && scores?.clusterScore !== undefined 
+            ? scores.clusterScore.toFixed(1) 
+            : "-";
+          
+          // Add ⊘ marker CHỈ KHI đã chấm và không được giao
+          rowData.push(shouldMarkNotAssigned ? `⊘ ${selfScoreValue}` : selfScoreValue);
+          rowData.push(shouldMarkNotAssigned ? `⊘ ${clusterScoreValue}` : clusterScoreValue);
         });
 
         worksheet.addRow(rowData);
@@ -2701,8 +2705,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         worksheet.getColumn(i).width = 8; // Score columns
       }
 
-      // Add borders to all cells
-      worksheet.eachRow((row) => {
+      // Add borders to all cells and style not-assigned cells
+      worksheet.eachRow((row, rowNumber) => {
         row.eachCell((cell) => {
           cell.border = {
             top: { style: "thin" },
@@ -2714,6 +2718,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             vertical: "middle",
             horizontal: "center",
           };
+          
+          // Style cells with ⊘ marker (not assigned) with orange background
+          if (rowNumber > 3 && typeof cell.value === "string" && cell.value.startsWith("⊘")) {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFFED7AA" }, // Light orange
+            };
+            cell.font = {
+              color: { argb: "FFC2410C" }, // Orange text
+              bold: true,
+            };
+          }
         });
       });
 
@@ -2727,6 +2744,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         }
       });
+
+      // Add legend/note at the bottom
+      const lastRow = worksheet.rowCount;
+      worksheet.addRow([]); // Empty row
+      const legendRow1 = worksheet.addRow(["Chú thích:"]);
+      const legendRow2 = worksheet.addRow(["ĐTC: Điểm tự chấm | TĐ: Điểm thẩm định"]);
+      const legendRow3 = worksheet.addRow(["⊘: Đơn vị không được giao tiêu chí (ô màu cam) | -: Chưa chấm điểm"]);
+      
+      // Style legend rows
+      [legendRow1, legendRow2, legendRow3].forEach(row => {
+        row.font = { size: 9, italic: true };
+        const cell = row.getCell(1);
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+      });
+      legendRow1.font = { size: 9, bold: true };
 
       // Generate filename
       const filename = `BangDiemChiTiet_${cluster.shortName}_${period.name.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.xlsx`;
