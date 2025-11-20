@@ -2,6 +2,9 @@ import type { Express } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { criteriaTreeStorage } from "./criteriaTreeStorage";
 import type { InsertCriteria, InsertCriteriaResult } from "@shared/schema";
+import { db } from "./db";
+import * as schema from "@shared/schema";
+import { eq, and } from "drizzle-orm";
 
 /**
  * Middleware kiểm tra quyền truy cập
@@ -200,6 +203,35 @@ export function setupCriteriaTreeRoutes(app: Express) {
       }
       
       const saved = await criteriaTreeStorage.saveCriteriaResult(result);
+      
+      // Tự động tính điểm cho tiêu chí định lượng (Type 1)
+      const criteria = await criteriaTreeStorage.getCriteriaById(result.criteriaId);
+      if (criteria && criteria.criteriaType === 1 && result.actualValue) {
+        try {
+          await criteriaTreeStorage.calculateCriteriaScore(
+            result.criteriaId,
+            result.unitId,
+            result.periodId
+          );
+          
+          // Lấy lại kết quả sau khi tính điểm
+          const [updatedResult] = await db
+            .select()
+            .from(schema.criteriaResults)
+            .where(and(
+              eq(schema.criteriaResults.criteriaId, result.criteriaId),
+              eq(schema.criteriaResults.unitId, result.unitId),
+              eq(schema.criteriaResults.periodId, result.periodId)
+            ))
+            .limit(1);
+          
+          return res.json(updatedResult || saved);
+        } catch (calcError) {
+          // Nếu có lỗi khi tính điểm, vẫn trả về kết quả đã lưu
+          console.error("Lỗi khi tính điểm tự động:", calcError);
+        }
+      }
+      
       res.json(saved);
     } catch (error: any) {
       next(error);

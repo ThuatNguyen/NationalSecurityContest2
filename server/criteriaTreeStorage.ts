@@ -378,13 +378,24 @@ export class CriteriaTreeStorage {
     );
     
     // Update result with calculated score
+    // Đối với tiêu chí định lượng (Type 1), tự động điền vào cột thẩm định
+    const updateData: any = {
+      calculatedScore: calculatedScore.toString(),
+      updatedAt: new Date()
+    };
+    
+    if (criteria.criteriaType === 1) {
+      // Tự động điền vào thẩm định lần 1 (clusterScore) và lần 2 (finalScore)
+      updateData.clusterScore = calculatedScore.toString();
+      updateData.finalScore = calculatedScore.toString();
+    } else {
+      // Các loại khác vẫn giữ logic cũ
+      updateData.finalScore = calculatedScore.toString();
+    }
+    
     await db
       .update(schema.criteriaResults)
-      .set({
-        calculatedScore: calculatedScore.toString(),
-        finalScore: calculatedScore.toString(), // Default final = calculated
-        updatedAt: new Date()
-      })
+      .set(updateData)
       .where(and(
         eq(schema.criteriaResults.criteriaId, criteriaId),
         eq(schema.criteriaResults.unitId, unitId),
