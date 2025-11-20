@@ -2479,6 +2479,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             )
         : [];
 
+      // Get all criteria for this period and cluster (to calculate max scores)
+      const allCriteria = await db.select()
+        .from(schema.criteria)
+        .where(
+          and(
+            eq(schema.criteria.periodId, periodId),
+            eq(schema.criteria.clusterId, clusterId)
+          )
+        );
+
+      // Get all criteria targets for units
+      const criteriaTargets = unitIds.length > 0
+        ? await db.select()
+            .from(schema.criteriaTargets)
+            .where(
+              and(
+                eq(schema.criteriaTargets.periodId, periodId),
+                inArray(schema.criteriaTargets.unitId, unitIds)
+              )
+            )
+        : [];
+
+      // Calculate total max score from root criteria (parentId = null)
+      const totalMaxScore = allCriteria
+        .filter(c => !c.parentId || c.parentId === null)
+        .reduce((sum, c) => sum + parseFloat(c.maxScore), 0);
+
       // Build summary data by summing up criteriaResults
       const summaryData = units.map(unit => {
         const evaluation = evaluations.find(e => e.unitId === unit.id);
@@ -2501,12 +2528,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return sum + score;
         }, 0);
         
+        // Calculate maxScoreAssigned = totalMaxScore - sum of unassigned criteria maxScores
+        let notAssignedTotal = 0;
+        
+        // Check each leaf criteria (criteriaType 1-4) for "no target but has result"
+        const leafCriteria = allCriteria.filter(c => c.criteriaType && c.criteriaType >= 1 && c.criteriaType <= 4);
+        leafCriteria.forEach(criteria => {
+          const result = unitResults.find(r => r.criteriaId === criteria.id);
+          const target = criteriaTargets.find(t => t.unitId === unit.id && t.criteriaId === criteria.id);
+          
+          if (result && result.actualValue) {
+            const actualValue = parseFloat(result.actualValue);
+            const targetValue = target ? parseFloat(target.targetValue) : null;
+            
+            // Check if "no target but has result": targetValue = 0 AND actualValue > 0
+            if (targetValue === 0 && actualValue > 0) {
+              notAssignedTotal += parseFloat(criteria.maxScore);
+            }
+          }
+        });
+        
+        const maxScoreAssigned = totalMaxScore - notAssignedTotal;
+        
         return {
           unitId: unit.id,
           unitName: unit.name,
           selfScore,
           clusterScore,
           approvedScore,
+          maxScoreAssigned,
+          totalMaxScore,
           status: evaluation?.status || "draft",
         };
       });

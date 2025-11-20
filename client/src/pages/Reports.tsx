@@ -20,6 +20,8 @@ interface UnitScore {
   selfScore: number;
   clusterScore: number;
   approvedScore: number;
+  maxScoreAssigned: number;
+  totalMaxScore: number;
   status: string;
   ranking: number;
 }
@@ -242,11 +244,11 @@ export default function Reports() {
                 <table className="w-full">
                   <thead className="bg-muted">
                     <tr className="border-b">
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide w-16">
-                        Hạng
+                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-16">
+                        STT
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide min-w-[250px]">
-                        Đơn vị
+                        Tên đơn vị
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-32">
                         Tự chấm
@@ -260,15 +262,42 @@ export default function Reports() {
                       <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-32">
                         Tỷ lệ
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-40">
+                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-24">
+                        Thứ hạng
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-40 no-print">
                         Trạng thái
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {scores.map((score) => (
+                    {scores.map((score, index) => (
                       <tr key={score.unitId} className="border-b hover-elevate" data-testid={`row-unit-${score.unitId}`}>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-4 py-3 text-center text-sm font-medium">
+                          {index + 1}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium" data-testid={`text-unit-${score.unitId}`}>
+                          {score.unitName}
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm font-medium" data-testid={`text-selfscore-${score.unitId}`}>
+                          {score.selfScore > 0 && score.maxScoreAssigned != null
+                            ? `${score.selfScore.toFixed(1)}/${score.maxScoreAssigned.toFixed(1)}` 
+                            : score.selfScore > 0 
+                            ? score.selfScore.toFixed(1)
+                            : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm font-medium" data-testid={`text-clusterscore-${score.unitId}`}>
+                          {score.clusterScore > 0 ? score.clusterScore.toFixed(1) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm font-bold" data-testid={`text-approvedscore-${score.unitId}`}>
+                          {score.approvedScore > 0 ? score.approvedScore.toFixed(1) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm text-muted-foreground">
+                          {score.selfScore > 0 && score.maxScoreAssigned != null && score.maxScoreAssigned > 0
+                            ? `${((score.selfScore / score.maxScoreAssigned) * 100).toFixed(1)}%`
+                            : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm font-medium">
                           <div className="flex items-center justify-center">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
                               score.ranking === 1 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
@@ -280,22 +309,7 @@ export default function Reports() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-sm font-medium" data-testid={`text-unit-${score.unitId}`}>
-                          {score.unitName}
-                        </td>
-                        <td className="px-4 py-3 text-center text-sm font-medium" data-testid={`text-selfscore-${score.unitId}`}>
-                          {score.selfScore > 0 ? score.selfScore.toFixed(1) : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-center text-sm font-medium" data-testid={`text-clusterscore-${score.unitId}`}>
-                          {score.clusterScore > 0 ? score.clusterScore.toFixed(1) : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-center text-sm font-bold" data-testid={`text-approvedscore-${score.unitId}`}>
-                          {score.approvedScore > 0 ? score.approvedScore.toFixed(1) : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-center text-sm text-muted-foreground">
-                          -
-                        </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-4 py-3 text-center no-print">
                           {getStatusBadge(score.status)}
                         </td>
                       </tr>
@@ -350,47 +364,44 @@ export default function Reports() {
             <thead>
               <tr className="border">
                 <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-12">
-                  Hạng
+                  STT
                 </th>
                 <th className="border px-2 py-2 text-left text-xs font-semibold uppercase">
-                  Đơn vị
+                  Tên đơn vị
                 </th>
                 <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-24">
-                  Điểm tự chấm
+                  Tự chấm
                 </th>
                 <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-24">
-                  Điểm cụm chấm
+                  Cụm chấm
                 </th>
                 <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-24">
-                  Điểm được duyệt
+                  Điểm duyệt
                 </th>
-                <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-32">
-                  Trạng thái
+                <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-20">
+                  Tỷ lệ
+                </th>
+                <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-16">
+                  Thứ hạng
                 </th>
               </tr>
             </thead>
             <tbody>
-              {scores.map((score) => {
-                const statusLabels: Record<string, string> = {
-                  finalized: "Đã duyệt",
-                  review2_completed: "Chờ duyệt cuối",
-                  explanation_submitted: "Đã giải trình",
-                  review1_completed: "Đã chấm cụm",
-                  submitted: "Đã nộp",
-                  draft: "Chưa nộp",
-                };
-                const statusLabel = statusLabels[score.status] || "Chưa nộp";
-                
+              {scores.map((score, index) => {
                 return (
                   <tr key={score.unitId} className="border">
                     <td className="border px-2 py-2 text-center text-sm">
-                      {score.ranking}
+                      {index + 1}
                     </td>
                     <td className="border px-2 py-2 text-sm">
                       {score.unitName}
                     </td>
                     <td className="border px-2 py-2 text-center text-sm">
-                      {score.selfScore > 0 ? score.selfScore.toFixed(1) : '-'}
+                      {score.selfScore > 0 && score.maxScoreAssigned != null
+                        ? `${score.selfScore.toFixed(1)}/${score.maxScoreAssigned.toFixed(1)}` 
+                        : score.selfScore > 0 
+                        ? score.selfScore.toFixed(1)
+                        : '-'}
                     </td>
                     <td className="border px-2 py-2 text-center text-sm">
                       {score.clusterScore > 0 ? score.clusterScore.toFixed(1) : '-'}
@@ -399,7 +410,12 @@ export default function Reports() {
                       {score.approvedScore > 0 ? score.approvedScore.toFixed(1) : '-'}
                     </td>
                     <td className="border px-2 py-2 text-center text-sm">
-                      {statusLabel}
+                      {score.selfScore > 0 && score.maxScoreAssigned != null && score.maxScoreAssigned > 0
+                        ? `${((score.selfScore / score.maxScoreAssigned) * 100).toFixed(1)}%`
+                        : '-'}
+                    </td>
+                    <td className="border px-2 py-2 text-center text-sm font-semibold">
+                      {score.ranking}
                     </td>
                   </tr>
                 );

@@ -714,6 +714,44 @@ export default function EvaluationPeriods() {
     );
   };
 
+  // Calculate total assigned maxScore (excluding criteria with no target)
+  const calculateAssignedMaxScore = () => {
+    if (!summary?.criteriaGroups) return { totalMax: 0, assignedMax: 0 };
+    
+    let totalMax = 0;
+    let notAssignedTotal = 0;
+    
+    summary.criteriaGroups.forEach((group) => {
+      const rootCriteria = group.criteria.find(c => !c.parentId || c.parentId === null);
+      if (!rootCriteria) return;
+      
+      const maxScore = rootCriteria.maxScore as number || 0;
+      totalMax += maxScore;
+      
+      // Check ALL leaf criteria in this group for "no target" status
+      // A leaf criteria is one with criteriaType 1-4 (not 0 which is parent)
+      group.criteria.forEach((criteria) => {
+        // Only check leaf criteria (criteriaType 1-4)
+        if (criteria.criteriaType && criteria.criteriaType >= 1 && criteria.criteriaType <= 4) {
+          const hasTarget = criteria.targetValue !== null && criteria.targetValue !== undefined;
+          const hasActual = criteria.actualValue !== null && criteria.actualValue !== undefined;
+          const isNoTargetButHasResult = hasTarget && criteria.targetValue === 0 && hasActual && Number(criteria.actualValue) > 0;
+          
+          // If it's a "no target" case, add to notAssignedTotal
+          if (isNoTargetButHasResult) {
+            const criteriaMaxScore = criteria.maxScore as number || 0;
+            notAssignedTotal += criteriaMaxScore;
+          }
+        }
+      });
+    });
+    
+    return {
+      totalMax,
+      assignedMax: totalMax - notAssignedTotal,
+    };
+  };
+
   // Helper: Calculate sum of children's scores (only leaf nodes to avoid double counting)
   // A parent node has criteriaType = 0, leaf nodes have criteriaType = 1-4
   // Uses parentId to identify direct and indirect children, with fallback to level-based calculation
@@ -1520,7 +1558,13 @@ export default function EvaluationPeriods() {
                       TỔNG CỘNG
                     </td>
                     <td className="px-4 py-3 text-sm text-center">
-                      {calculateOverallTotal("maxScore").toFixed(1)}
+                      {(() => {
+                        const { totalMax, assignedMax } = calculateAssignedMaxScore();
+                        if (assignedMax < totalMax) {
+                          return `${assignedMax.toFixed(1)}/${totalMax.toFixed(1)}`;
+                        }
+                        return totalMax.toFixed(1);
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-sm text-center border-l">
                       {calculateOverallTotal("selfScore").toFixed(2)}
