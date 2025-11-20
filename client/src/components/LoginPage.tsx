@@ -19,12 +19,20 @@ export default function LoginPage() {
       const response = await apiRequest('POST', '/api/auth/login', credentials);
       return await response.json();
     },
-    onSuccess: (user: any) => {
+    onSuccess: async (user: any) => {
+      // Update cache with user data
       queryClient.setQueryData(['/api/auth/me'], user);
+      
+      // Invalidate to trigger refetch and re-render App
+      await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      
       toast({
         title: "Đăng nhập thành công",
         description: `Chào mừng, ${user.fullName}!`,
       });
+      
+      // Force reload to ensure clean state (similar to logout)
+      window.location.href = '/';
     },
     onError: (error: any) => {
       toast({

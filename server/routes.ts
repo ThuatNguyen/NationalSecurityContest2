@@ -1841,6 +1841,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk update scores for an evaluation (multi-stage scoring)
   app.put("/api/evaluations/:id/scores", requireAuth, async (req, res, next) => {
     try {
+      console.log("[PUT /api/evaluations/:id/scores] Request received:", {
+        evaluationId: req.params.id,
+        scoresCount: req.body.scores?.length,
+        scores: req.body.scores,
+      });
+      
       const evaluation = await storage.getEvaluation(req.params.id);
       if (!evaluation) {
         return res.status(404).json({ message: "Không tìm thấy đánh giá" });
@@ -2000,6 +2006,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Note: finalScore will be recalculated by helper function after all updates
           score = await storage.updateScore(existingScore.id, updateData);
+          
+          // ALSO update criteriaResults table for new system compatibility
+          // Map review1Score -> clusterScore, review2Score -> finalScore
+          const criteriaResultUpdate: any = {
+            criteriaId: scoreData.criteriaId,
+            unitId: evaluation.unitId,
+            periodId: evaluation.periodId,
+          };
+          
+          if (scoreData.review1Score !== undefined) {
+            criteriaResultUpdate.clusterScore = scoreData.review1Score.toString();
+          }
+          if (scoreData.review2Score !== undefined) {
+            criteriaResultUpdate.finalScore = scoreData.review2Score.toString();
+          }
+          
+          // Only update if we have review scores to save
+          if (criteriaResultUpdate.clusterScore !== undefined || criteriaResultUpdate.finalScore !== undefined) {
+            console.log("[REVIEW SAVE] Updating criteriaResults:", criteriaResultUpdate);
+            const updated = await storage.upsertCriteriaResult(criteriaResultUpdate);
+            console.log("[REVIEW SAVE] CriteriaResult updated:", updated);
+          }
         } else {
           // Create new score
           const newScore: any = {
@@ -2273,10 +2301,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Batch recalculate scores for Type 1 (Quantitative) criteria
   app.post("/api/criteria-results/recalculate", requireRole("admin", "cluster_leader"), async (req, res, next) => {
     try {
+      console.log("[RECALCULATE] Request received:", req.body);
+      
       const inputData = z.object({
         periodId: z.string(),
         clusterId: z.string().optional(),
       }).parse(req.body);
+
+      console.log("[RECALCULATE] User:", req.user?.username, "Role:", req.user?.role);
 
       // Permission check: Cluster leader can only recalculate for their own cluster
       if (req.user!.role === "cluster_leader") {
@@ -2397,6 +2429,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Recalculate scores for each criteria (batch by criteria to determine leader)
       let totalRecalculated = 0;
+      console.log("[RECALCULATE] Processing", resultsByCriteria.size, "criteria...");
+      
       for (const criteriaId of Array.from(resultsByCriteria.keys())) {
         const criteriaResults = resultsByCriteria.get(criteriaId)!;
         const criteria = criteriaMap.get(criteriaId);
@@ -2405,6 +2439,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const targets = targetsMap.get(criteriaId);
         if (!targets) continue;
         
+        console.log("[RECALCULATE] Criteria:", criteria.name, "- Units:", criteriaResults.length);
+        
         // Use the new batch calculation algorithm
         const scores = CriteriaScoreService.batchCalculateQuantitativeScores(
           criteriaResults,
@@ -2412,16 +2448,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Number(criteria.maxScore)
         );
         
+        console.log("[RECALCULATE] Calculated scores:", Array.from(scores.entries()).map(([uid, s]) => ({ unitId: uid.substring(0, 8), score: s })));
+        
         // Update all scores in database
         for (const result of criteriaResults) {
           const calculatedScore = scores.get(result.unitId);
           if (calculatedScore === undefined) continue;
           
+          console.log("[RECALCULATE] Updating result ID:", result.id.substring(0, 8), "Score:", calculatedScore);
+          
+          // Only update calculatedScore - DO NOT overwrite review scores (clusterScore/finalScore)
+          // Review scores should only be set by reviewers through the review modal
           await db.update(schema.criteriaResults)
             .set({ 
               calculatedScore: calculatedScore.toString(),
-              clusterScore: calculatedScore.toString(), // Copy to cluster score (review1)
-              finalScore: calculatedScore.toString(),   // Copy to final score (review2)
               updatedAt: new Date(),
             })
             .where(eq(schema.criteriaResults.id, result.id));
@@ -2429,6 +2469,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalRecalculated++;
         }
       }
+      
+      console.log("[RECALCULATE] Total updated:", totalRecalculated);
 
       res.json({ 
         message: `Đã tính lại ${totalRecalculated} tiêu chí định lượng thành công`,

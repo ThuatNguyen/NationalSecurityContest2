@@ -33,8 +33,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await apiRequest('POST', '/api/auth/logout');
     },
     onSuccess: () => {
+      // Clear user data from cache
       queryClient.setQueryData(['/api/auth/me'], null);
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      
+      // Clear all queries to reset app state
+      queryClient.clear();
+      
+      // Force reload to login page
+      window.location.href = '/';
     },
   });
 

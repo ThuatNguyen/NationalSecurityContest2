@@ -13,7 +13,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { FileText, RefreshCw, Send, FileSpreadsheet, Printer } from "lucide-react";
-import { useState, useMemo, useEffect, Fragment } from "react";
+import { useState, useMemo, useEffect, Fragment, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSession } from "@/lib/useSession";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import ScoringModal from "@/components/ScoringModal";
 import ReviewModal from "@/components/ReviewModal";
+import QualitativeReviewModal from "@/components/QualitativeReviewModal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -94,6 +95,7 @@ export default function EvaluationPeriods() {
   const { toast } = useToast();
   const [scoringModalOpen, setScoringModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [qualitativeReviewModalOpen, setQualitativeReviewModalOpen] = useState(false);
   const [selectedCriteria, setSelectedCriteria] = useState<Criteria | null>(
     null,
   );
@@ -104,6 +106,11 @@ export default function EvaluationPeriods() {
   const [selectedClusterId, setSelectedClusterId] = useState<string>("");
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  
+  // Refs for debouncing
+  const periodChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clusterChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const unitChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Query all evaluation periods
   const {
@@ -114,12 +121,16 @@ export default function EvaluationPeriods() {
   } = useQuery<any[]>({
     queryKey: ["/api/evaluation-periods"],
     enabled: !!user,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
 
   // Query clusters for selected period
   const { data: clusters = [], isLoading: loadingClusters } = useQuery<any[]>({
     queryKey: [`/api/evaluation-periods/${selectedPeriodId}/clusters`],
     enabled: !!selectedPeriodId,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
 
   // Query units (filtered by cluster)
@@ -136,6 +147,8 @@ export default function EvaluationPeriods() {
       return res.json();
     },
     enabled: !!selectedClusterId,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
 
   // Get selected period from periods list
@@ -164,6 +177,15 @@ export default function EvaluationPeriods() {
     }
     return null;
   }, [units, selectedUnitId]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (periodChangeTimeoutRef.current) clearTimeout(periodChangeTimeoutRef.current);
+      if (clusterChangeTimeoutRef.current) clearTimeout(clusterChangeTimeoutRef.current);
+      if (unitChangeTimeoutRef.current) clearTimeout(unitChangeTimeoutRef.current);
+    };
+  }, []);
 
   // Step 1: Auto-select first period when periods are loaded
   useEffect(() => {
@@ -256,11 +278,39 @@ export default function EvaluationPeriods() {
     return units.filter((u) => u.clusterId === selectedClusterId);
   }, [units, selectedClusterId]);
 
-  // Handle cluster change (only for admin)
-  const handleClusterChange = (clusterId: string) => {
-    setSelectedClusterId(clusterId);
-    setSelectedUnitId(""); // Reset unit when cluster changes
-  };
+  // Handle cluster change (only for admin) - with debounce
+  const handleClusterChange = useCallback((clusterId: string) => {
+    if (clusterChangeTimeoutRef.current) {
+      clearTimeout(clusterChangeTimeoutRef.current);
+    }
+    
+    clusterChangeTimeoutRef.current = setTimeout(() => {
+      setSelectedClusterId(clusterId);
+      setSelectedUnitId(""); // Reset unit when cluster changes
+    }, 150); // Debounce 150ms
+  }, []);
+  
+  // Handle unit change - with debounce
+  const handleUnitChange = useCallback((unitId: string) => {
+    if (unitChangeTimeoutRef.current) {
+      clearTimeout(unitChangeTimeoutRef.current);
+    }
+    
+    unitChangeTimeoutRef.current = setTimeout(() => {
+      setSelectedUnitId(unitId);
+    }, 150); // Debounce 150ms
+  }, []);
+  
+  // Handle period change - with debounce
+  const handlePeriodChange = useCallback((periodId: string) => {
+    if (periodChangeTimeoutRef.current) {
+      clearTimeout(periodChangeTimeoutRef.current);
+    }
+    
+    periodChangeTimeoutRef.current = setTimeout(() => {
+      setSelectedPeriodId(periodId);
+    }, 150); // Debounce 150ms
+  }, []);
 
   // Query evaluation summary (only when period and unit are available)
   const {
@@ -277,21 +327,48 @@ export default function EvaluationPeriods() {
       "summary",
     ],
     enabled: !!selectedPeriod?.id && !!selectedUnitId,
+    staleTime: 2 * 60 * 1000, // Data fresh for 2 minutes (shorter since scores change)
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    select: (data) => {
+      // Log review scores for debugging
+      console.log("[SUMMARY DATA] Loaded evaluation summary");
+      data.criteriaGroups.forEach((group) => {
+        group.criteria.forEach((item) => {
+          if (item.review1Score !== undefined || item.review2Score !== undefined) {
+            console.log(`[REVIEW SCORES] ${item.name}:`, {
+              review1Score: item.review1Score,
+              review2Score: item.review2Score,
+              review1Comment: item.review1Comment,
+              review2Comment: item.review2Comment,
+            });
+          }
+        });
+      });
+      return data;
+    },
   });
 
-  const handleOpenScoringModal = (criteria: Criteria) => {
+  const handleOpenScoringModal = useCallback((criteria: Criteria) => {
     setSelectedCriteria(criteria);
     setScoringModalOpen(true);
-  };
+  }, []);
 
-  const handleOpenReviewModal = (
+  const handleOpenReviewModal = useCallback((
     criteria: Criteria,
     type: "review1" | "review2",
   ) => {
     setSelectedCriteria(criteria);
     setReviewType(type);
-    setReviewModalOpen(true);
-  };
+    
+    // Open different modal based on criteria type
+    // criteriaType 2 = qualitative (định tính) - use QualitativeReviewModal
+    // Other types - use regular ReviewModal with score input and file upload
+    if (criteria.criteriaType === 2) {
+      setQualitativeReviewModalOpen(true);
+    } else {
+      setReviewModalOpen(true);
+    }
+  }, []);
 
   // OLD saveScoreMutation removed - now using handleSaveScore with new API
 
@@ -495,6 +572,7 @@ export default function EvaluationPeriods() {
         description: "Đã lưu điểm thẩm định thành công",
       });
       setReviewModalOpen(false);
+      setQualitativeReviewModalOpen(false);
     },
     onError: (error: any) => {
       toast({
@@ -525,6 +603,28 @@ export default function EvaluationPeriods() {
       criteriaId: selectedCriteria.id,
       reviewType,
       existingFileUrl,
+    });
+  };
+
+  // Handler for qualitative review (no file upload)
+  const handleSaveQualitativeReview = (score: number, comment: string) => {
+    if (!selectedCriteria) return;
+
+    console.log("[QUALITATIVE REVIEW] Saving:", {
+      criteriaId: selectedCriteria.id,
+      criteriaName: selectedCriteria.name,
+      score,
+      comment,
+      reviewType,
+    });
+
+    saveReviewMutation.mutate({
+      score,
+      comment,
+      file: null,
+      criteriaId: selectedCriteria.id,
+      reviewType,
+      existingFileUrl: null,
     });
   };
 
@@ -657,22 +757,20 @@ export default function EvaluationPeriods() {
       });
       return await res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       console.log("[RECALCULATE] Success", data);
-      toast({
-        title: "Thành công",
-        description: data.message || "Đã tính lại điểm thành công",
-      });
       
-      // Invalidate ALL relevant queries to force refetch
-      // 1. Invalidate general units query
-      queryClient.invalidateQueries({
+      // Refetch data immediately to show updated scores
+      console.log("[RECALCULATE] Refetching data...");
+      
+      // 1. Refetch general units query
+      await queryClient.refetchQueries({
         queryKey: ["/api/evaluation-periods", selectedPeriod?.id, "units"],
       });
       
-      // 2. Invalidate specific summary for current unit
+      // 2. Refetch specific summary for current unit
       if (selectedUnitId) {
-        queryClient.invalidateQueries({
+        await queryClient.refetchQueries({
           queryKey: [
             "/api/evaluation-periods",
             selectedPeriod?.id,
@@ -682,6 +780,13 @@ export default function EvaluationPeriods() {
           ],
         });
       }
+      
+      console.log("[RECALCULATE] Data refetched successfully");
+      
+      toast({
+        title: "Thành công",
+        description: data.message || "Đã tính lại điểm thành công. Dữ liệu đã được cập nhật.",
+      });
     },
     onError: (error: any) => {
       console.error("[RECALCULATE] Error", error);
@@ -1007,7 +1112,7 @@ export default function EvaluationPeriods() {
           ) : periods.length > 0 ? (
             <Select
               value={selectedPeriodId}
-              onValueChange={setSelectedPeriodId}
+              onValueChange={handlePeriodChange}
             >
               <SelectTrigger id="filter-period" data-testid="select-period">
                 <SelectValue placeholder="Chọn kỳ thi đua" />
@@ -1083,7 +1188,7 @@ export default function EvaluationPeriods() {
                 "Chưa có đơn vị"}
             </div>
           ) : (
-            <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
+            <Select value={selectedUnitId} onValueChange={handleUnitChange}>
               <SelectTrigger id="filter-unit" data-testid="select-unit">
                 <SelectValue placeholder="Chọn đơn vị" />
               </SelectTrigger>
@@ -1502,21 +1607,32 @@ export default function EvaluationPeriods() {
                                       {childrenReview1ScoreTotal > 0 ? childrenReview1ScoreTotal.toFixed(2) : '-'}
                                     </span>
                                   ) : canReview1 ? (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        handleOpenReviewModal(item, "review1")
-                                      }
-                                      className="font-medium text-sm"
-                                      data-testid={`button-review1-${item.id}`}
-                                    >
-                                      {item.review1Score != null &&
-                                      !isNaN(Number(item.review1Score))
-                                        ? Number(item.review1Score).toFixed(2)
-                                        : "Thẩm định"}
-                                    </Button>
+                                    // Review permission: Show score if exists, otherwise show button
+                                    item.review1Score != null && !isNaN(Number(item.review1Score)) ? (
+                                      // Already reviewed - show score as clickable text (can re-review)
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleOpenReviewModal(item, "review1")}
+                                        className="font-medium text-sm text-primary hover:text-primary/80"
+                                        data-testid={`button-review1-edit-${item.id}`}
+                                      >
+                                        {Number(item.review1Score).toFixed(2)}
+                                      </Button>
+                                    ) : (
+                                      // Not reviewed yet - show "Thẩm định" button
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenReviewModal(item, "review1")}
+                                        className="font-medium text-sm"
+                                        data-testid={`button-review1-${item.id}`}
+                                      >
+                                        Thẩm định
+                                      </Button>
+                                    )
                                   ) : (
+                                    // No permission - show score or dash
                                     <span
                                       className="font-medium text-sm"
                                       data-testid={`text-review1-${item.id}`}
@@ -1546,21 +1662,32 @@ export default function EvaluationPeriods() {
                                       {childrenReview2ScoreTotal > 0 ? childrenReview2ScoreTotal.toFixed(2) : '-'}
                                     </span>
                                   ) : canReview2 ? (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        handleOpenReviewModal(item, "review2")
-                                      }
-                                      className="font-medium text-sm"
-                                      data-testid={`button-review2-${item.id}`}
-                                    >
-                                      {item.review2Score != null &&
-                                      !isNaN(Number(item.review2Score))
-                                        ? Number(item.review2Score).toFixed(2)
-                                        : "Thẩm định"}
-                                    </Button>
+                                    // Review permission: Show score if exists, otherwise show button
+                                    item.review2Score != null && !isNaN(Number(item.review2Score)) ? (
+                                      // Already reviewed - show score as clickable text (can re-review)
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleOpenReviewModal(item, "review2")}
+                                        className="font-medium text-sm text-primary hover:text-primary/80"
+                                        data-testid={`button-review2-edit-${item.id}`}
+                                      >
+                                        {Number(item.review2Score).toFixed(2)}
+                                      </Button>
+                                    ) : (
+                                      // Not reviewed yet - show "Thẩm định" button
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenReviewModal(item, "review2")}
+                                        className="font-medium text-sm"
+                                        data-testid={`button-review2-${item.id}`}
+                                      >
+                                        Thẩm định
+                                      </Button>
+                                    )
                                   ) : (
+                                    // No permission - show score or dash
                                     <span
                                       className="font-medium text-sm"
                                       data-testid={`text-review2-${item.id}`}
@@ -1714,6 +1841,25 @@ export default function EvaluationPeriods() {
                 }
                 reviewType={reviewType}
                 onSave={handleSaveReview}
+              />
+              <QualitativeReviewModal
+                open={qualitativeReviewModalOpen}
+                onClose={() => setQualitativeReviewModalOpen(false)}
+                criteriaName={selectedCriteria.name}
+                maxScore={selectedCriteria.maxScore}
+                selfScore={selectedCriteria.selfScore}
+                currentReviewScore={
+                  reviewType === "review1"
+                    ? selectedCriteria.review1Score
+                    : selectedCriteria.review2Score
+                }
+                currentComment={
+                  reviewType === "review1"
+                    ? selectedCriteria.review1Comment
+                    : selectedCriteria.review2Comment
+                }
+                reviewType={reviewType}
+                onSave={handleSaveQualitativeReview}
               />
             </>
           )}

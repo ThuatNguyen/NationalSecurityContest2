@@ -842,12 +842,36 @@ export class DatabaseStorage implements IStorage {
         )
       );
     const targetsMap = new Map(criteriaTargets.map(t => [t.criteriaId, t]));
+    
+    // ALSO get scores from old table for review comments/files (backwards compatibility)
+    let scoresMap = new Map<string, any>();
+    if (evaluation?.id) {
+      const scores = await this.getScores(evaluation.id);
+      scoresMap = new Map(scores.map(s => [s.criteriaId, s]));
+      console.log(`[STORAGE] Loaded ${scores.length} old scores for evaluation ${evaluation.id}`);
+      scores.forEach(s => {
+        if (s.review1Score || s.review2Score) {
+          console.log(`[STORAGE] Old scores - criteriaId: ${s.criteriaId}, review1: ${s.review1Score}, review2: ${s.review2Score}`);
+        }
+      });
+    }
 
     // Transform tree into flat groups by level 1 nodes
     const flattenTree = (node: any, parentPath: string = '', parentNodeId: string | null = null): any[] => {
       const currentPath = parentPath ? `${parentPath}.${node.orderIndex}` : node.code || node.id.substring(0, 8);
       const result = resultsMap.get(node.id);
       const target = targetsMap.get(node.id);
+      const oldScore = scoresMap.get(node.id); // Get review data from old scores table
+
+      // Log review score mapping
+      if (result?.clusterScore || result?.finalScore) {
+        console.log(`[STORAGE] Criteria ${node.id} (${node.name}) review scores:`, {
+          clusterScore: result.clusterScore,
+          finalScore: result.finalScore,
+          oldScoreReview1: oldScore?.review1Score,
+          oldScoreReview2: oldScore?.review2Score,
+        });
+      }
 
       const flatNode = {
         id: node.id,
@@ -870,11 +894,11 @@ export class DatabaseStorage implements IStorage {
         // Old fields for backwards compatibility (if needed)
         selfScoreFile: result?.evidenceFile || null,
         review1Score: result?.clusterScore ? parseFloat(result.clusterScore) : undefined, // Cluster score = review1
-        review1Comment: null,
-        review1File: null,
+        review1Comment: oldScore?.review1Comment || null, // Get from old scores table
+        review1File: oldScore?.review1File || null, // Get from old scores table
         review2Score: result?.finalScore ? parseFloat(result.finalScore) : undefined, // Final score = review2
-        review2Comment: null,
-        review2File: null,
+        review2Comment: oldScore?.review2Comment || null, // Get from old scores table
+        review2File: oldScore?.review2File || null, // Get from old scores table
         finalScore: result?.finalScore ? parseFloat(result.finalScore) : undefined,
       };
 
