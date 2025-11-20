@@ -13,7 +13,6 @@ import UnitsManagement from "@/pages/UnitsManagement";
 import ClustersManagement from "@/pages/ClustersManagement";
 import CriteriaTreeManagement from "@/pages/CriteriaTreeManagement";
 import CriteriaScoring from "@/pages/CriteriaScoring";
-import ClusterReview from "@/pages/ClusterReview";
 import UsersManagement from "@/pages/UsersManagement";
 import EvaluationPeriods from "@/pages/EvaluationPeriods";
 import Reports from "@/pages/Reports";
@@ -75,11 +74,6 @@ function Router({ role }: { role: "admin" | "cluster_leader" | "user" }) {
       </Route>
       <Route path="/criteria-scoring">
         <CriteriaScoring />
-      </Route>
-      <Route path="/cluster-review">
-        <ProtectedRoute allowedRoles={["cluster_leader", "admin"]}>
-          <ClusterReview />
-        </ProtectedRoute>
       </Route>
       <Route path="/settings/users">
         <ProtectedRoute allowedRoles={usersAllowedRoles}>

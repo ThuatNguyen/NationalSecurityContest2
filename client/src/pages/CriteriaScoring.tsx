@@ -275,13 +275,12 @@ export default function CriteriaScoringPage() {
   });
   
   // Build criteria map for table display
-  const buildCriteriaMap = (nodes: CriteriaWithChildren[], map: Map<string, { name: string; code: string; criteriaType: number; maxScore: number }> = new Map()) => {
+  const buildCriteriaMap = (nodes: CriteriaWithChildren[], map: Map<string, { name: string; code: string; criteriaType: number }> = new Map()) => {
     nodes.forEach(node => {
       map.set(node.id, {
         name: node.name,
         code: node.code || "",
-        criteriaType: node.criteriaType,
-        maxScore: Number(node.maxScore)
+        criteriaType: node.criteriaType
       });
       if (node.children && node.children.length > 0) {
         buildCriteriaMap(node.children, map);

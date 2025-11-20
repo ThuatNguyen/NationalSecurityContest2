@@ -84,20 +84,6 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
     allowedRoles: ["admin", "cluster_leader", "user"]
   },
   { 
-    title: "Chấm điểm tiêu chí", 
-    url: "/criteria-scoring", 
-    icon: ClipboardList, 
-    testId: "nav-criteria-scoring",
-    allowedRoles: ["admin", "cluster_leader", "user"]
-  },
-  { 
-    title: "Thẩm định cụm", 
-    url: "/cluster-review", 
-    icon: Shield, 
-    testId: "nav-cluster-review",
-    allowedRoles: ["admin", "cluster_leader"]
-  },
-  { 
     title: "Báo cáo", 
     url: "/reports", 
     icon: FileText, 
