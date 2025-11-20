@@ -284,6 +284,144 @@ export function setupCriteriaTreeRoutes(app: Express) {
   });
   
   /**
+   * POST /api/criteria-results/review
+   * Lưu điểm thẩm định (cluster leader review or final review)
+   */
+  app.post("/api/criteria-results/review", requireRole("cluster_leader", "admin"), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { criteriaId, unitId, periodId, reviewType, clusterScore, finalScore, reviewComment } = req.body;
+      
+      // Validate required fields
+      if (!criteriaId || !unitId || !periodId || !reviewType) {
+        return res.status(400).json({ message: "Thiếu thông tin bắt buộc" });
+      }
+      
+      if (reviewType !== "cluster" && reviewType !== "final") {
+        return res.status(400).json({ message: "reviewType không hợp lệ" });
+      }
+      
+      // Verify that criteria result exists
+      const [existingResult] = await db
+        .select()
+        .from(schema.criteriaResults)
+        .where(and(
+          eq(schema.criteriaResults.criteriaId, criteriaId),
+          eq(schema.criteriaResults.unitId, unitId),
+          eq(schema.criteriaResults.periodId, periodId)
+        ))
+        .limit(1);
+      
+      if (!existingResult) {
+        return res.status(404).json({ message: "Không tìm thấy kết quả chấm điểm" });
+      }
+      
+      // Verify permissions
+      const user = req.user as any;
+      if (user.role === "cluster_leader") {
+        const [unit] = await db
+          .select()
+          .from(schema.units)
+          .where(eq(schema.units.id, unitId))
+          .limit(1);
+        
+        if (!unit || unit.clusterId !== user.clusterId) {
+          return res.status(403).json({ message: "Bạn chỉ có thể thẩm định đơn vị trong cụm của mình" });
+        }
+        
+        // Cluster leaders can only do cluster review
+        if (reviewType !== "cluster") {
+          return res.status(403).json({ message: "Bạn chỉ có thể thực hiện thẩm định cấp cụm" });
+        }
+      }
+      
+      // Fetch criteria to validate against maxScore
+      const [criteria] = await db
+        .select()
+        .from(schema.criteria)
+        .where(eq(schema.criteria.id, criteriaId))
+        .limit(1);
+      
+      if (!criteria) {
+        return res.status(404).json({ message: "Không tìm thấy tiêu chí" });
+      }
+      
+      const maxScore = Number(criteria.maxScore);
+      
+      // Validate scores
+      if (reviewType === "cluster" && clusterScore !== undefined) {
+        if (typeof clusterScore !== "number" || isNaN(clusterScore)) {
+          return res.status(400).json({ message: "Điểm thẩm định không hợp lệ" });
+        }
+        if (clusterScore < 0) {
+          return res.status(400).json({ message: "Điểm thẩm định không được âm" });
+        }
+        if (clusterScore > maxScore) {
+          return res.status(400).json({ message: `Điểm thẩm định không được vượt quá ${maxScore}` });
+        }
+      }
+      
+      if (reviewType === "final" && finalScore !== undefined) {
+        if (typeof finalScore !== "number" || isNaN(finalScore)) {
+          return res.status(400).json({ message: "Điểm thẩm định không hợp lệ" });
+        }
+        if (finalScore < 0) {
+          return res.status(400).json({ message: "Điểm thẩm định không được âm" });
+        }
+        if (finalScore > maxScore) {
+          return res.status(400).json({ message: `Điểm thẩm định không được vượt quá ${maxScore}` });
+        }
+      }
+      
+      // Update the criteria result with review scores
+      const updateData: any = {
+        updatedAt: new Date()
+      };
+      
+      if (reviewType === "cluster" && clusterScore !== undefined) {
+        updateData.clusterScore = clusterScore.toString();
+      }
+      
+      if (reviewType === "final" && finalScore !== undefined) {
+        updateData.finalScore = finalScore.toString();
+      }
+      
+      // For now, store review comment in note field (can add separate column later)
+      if (reviewComment) {
+        updateData.note = reviewComment;
+      }
+      
+      // Ensure we have something to update
+      if (Object.keys(updateData).length === 1) { // Only updatedAt
+        return res.status(400).json({ message: "Không có dữ liệu để cập nhật" });
+      }
+      
+      await db
+        .update(schema.criteriaResults)
+        .set(updateData)
+        .where(and(
+          eq(schema.criteriaResults.criteriaId, criteriaId),
+          eq(schema.criteriaResults.unitId, unitId),
+          eq(schema.criteriaResults.periodId, periodId)
+        ));
+      
+      // Fetch and return updated result
+      const [updatedResult] = await db
+        .select()
+        .from(schema.criteriaResults)
+        .where(and(
+          eq(schema.criteriaResults.criteriaId, criteriaId),
+          eq(schema.criteriaResults.unitId, unitId),
+          eq(schema.criteriaResults.periodId, periodId)
+        ))
+        .limit(1);
+      
+      res.json(updatedResult);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  /**
    * GET /api/criteria-results
    * Lấy kết quả chấm điểm của đơn vị theo periodId
    */

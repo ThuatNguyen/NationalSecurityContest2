@@ -4,10 +4,11 @@ import type { CriteriaResult } from "@shared/schema";
 
 interface ScoreDetailTableProps {
   results: CriteriaResult[];
-  criteriaMap: Map<string, { name: string; code: string; criteriaType: number }>;
+  criteriaMap: Map<string, { name: string; code: string; criteriaType: number; maxScore: number }>;
+  onReview?: (result: CriteriaResult) => void;
 }
 
-export function ScoreDetailTable({ results, criteriaMap }: ScoreDetailTableProps) {
+export function ScoreDetailTable({ results, criteriaMap, onReview }: ScoreDetailTableProps) {
   const getCriteriaTypeLabel = (type: number) => {
     switch (type) {
       case 1: return "Định lượng";
@@ -62,7 +63,11 @@ export function ScoreDetailTable({ results, criteriaMap }: ScoreDetailTableProps
               if (!criteria) return null;
 
               return (
-                <TableRow key={result.id}>
+                <TableRow 
+                  key={result.id}
+                  className={onReview ? "cursor-pointer hover:bg-muted/50" : ""}
+                  onClick={() => onReview && onReview(result)}
+                >
                   <TableCell className="font-medium">{criteria.code}</TableCell>
                   <TableCell>{criteria.name}</TableCell>
                   <TableCell>
