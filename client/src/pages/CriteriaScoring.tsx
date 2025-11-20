@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { CriteriaTreeView, CriteriaScoreSummary } from "@/components/CriteriaTreeView";
+import { ScoreDetailTable } from "@/components/ScoreDetailTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Calculator } from "lucide-react";
+import { Save, Calculator, Table } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { CriteriaWithChildren, CriteriaResult } from "@shared/schema";
 
 export default function CriteriaScoringPage() {
@@ -272,6 +274,23 @@ export default function CriteriaScoringPage() {
     scoresMap[r.criteriaId] = Number(r.finalScore || r.calculatedScore || 0);
   });
   
+  // Build criteria map for table display
+  const buildCriteriaMap = (nodes: CriteriaWithChildren[], map: Map<string, { name: string; code: string; criteriaType: number }> = new Map()) => {
+    nodes.forEach(node => {
+      map.set(node.id, {
+        name: node.name,
+        code: node.code || "",
+        criteriaType: node.criteriaType
+      });
+      if (node.children && node.children.length > 0) {
+        buildCriteriaMap(node.children, map);
+      }
+    });
+    return map;
+  };
+  
+  const criteriaMap = buildCriteriaMap(tree);
+  
   if (!selectedUnit) {
     return (
       <div className="container mx-auto p-6">
@@ -307,30 +326,52 @@ export default function CriteriaScoringPage() {
                 </div>
               )}
               
-              {/* Tree with scoring */}
+              {/* Tabs for Tree View and Table View */}
               {treeLoading || resultsLoading ? (
                 <div className="text-center py-12">Đang tải...</div>
               ) : (
-                <div className="space-y-4">
-                  <CriteriaTreeView
-                    tree={tree}
-                    onScore={openScoringDialog}
-                    isEditable={false}
-                    scores={scoresMap}
-                    emptyMessage="Chưa có tiêu chí nào cho kỳ thi đua này"
-                  />
+                <Tabs defaultValue="tree" className="space-y-4">
+                  <TabsList>
+                    <TabsTrigger value="tree">Cây tiêu chí</TabsTrigger>
+                    <TabsTrigger value="table">Bảng chi tiết điểm</TabsTrigger>
+                  </TabsList>
                   
-                  {/* Clickable scoring */}
-                  <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                    <h3 className="font-semibold mb-2">Hướng dẫn:</h3>
-                    <ul className="text-sm space-y-1 text-muted-foreground">
-                      <li>• Click vào tiêu chí để nhập kết quả chấm điểm</li>
-                      <li>• Chỉ có thể chấm điểm cho tiêu chí lá (không có tiêu chí con)</li>
-                      <li>• Nhập dữ liệu và click "Tính điểm tự động" để hệ thống tính toán</li>
-                      <li>• Tổng điểm = tổng điểm của các tiêu chí lá</li>
-                    </ul>
-                  </div>
-                </div>
+                  <TabsContent value="tree" className="space-y-4">
+                    <CriteriaTreeView
+                      tree={tree}
+                      onScore={openScoringDialog}
+                      isEditable={false}
+                      scores={scoresMap}
+                      emptyMessage="Chưa có tiêu chí nào cho kỳ thi đua này"
+                    />
+                    
+                    {/* Clickable scoring */}
+                    <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                      <h3 className="font-semibold mb-2">Hướng dẫn:</h3>
+                      <ul className="text-sm space-y-1 text-muted-foreground">
+                        <li>• Click vào tiêu chí để nhập kết quả chấm điểm</li>
+                        <li>• Chỉ có thể chấm điểm cho tiêu chí lá (không có tiêu chí con)</li>
+                        <li>• Với tiêu chí định lượng (Type 1), hệ thống tự động tính điểm và điền vào cột thẩm định</li>
+                        <li>• Tổng điểm = tổng điểm của các tiêu chí lá</li>
+                      </ul>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="table" className="space-y-4">
+                    <div className="p-4 bg-blue-50 rounded-lg mb-4">
+                      <h3 className="font-semibold mb-2">Giải thích các cột điểm:</h3>
+                      <ul className="text-sm space-y-1 text-muted-foreground">
+                        <li>• <strong>Giá trị TT:</strong> Giá trị thực tế đạt được (chỉ với tiêu chí định lượng)</li>
+                        <li>• <strong>Tự chấm:</strong> Điểm tự đánh giá của đơn vị</li>
+                        <li>• <strong>Tính toán:</strong> Điểm do hệ thống tự động tính (tiêu chí định lượng)</li>
+                        <li>• <strong>TĐ lần 1:</strong> Thẩm định lần 1 (cấp cụm) - <span className="text-blue-600 font-semibold">Tự động điền với tiêu chí định lượng</span></li>
+                        <li>• <strong>TĐ lần 2:</strong> Thẩm định lần 2 (cấp cuối) - <span className="text-green-600 font-semibold">Tự động điền với tiêu chí định lượng</span></li>
+                      </ul>
+                    </div>
+                    
+                    <ScoreDetailTable results={results} criteriaMap={criteriaMap} />
+                  </TabsContent>
+                </Tabs>
               )}
             </>
           )}

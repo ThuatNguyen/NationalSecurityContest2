@@ -352,7 +352,23 @@ export class CriteriaTreeStorage {
               sql`${schema.criteriaResults.unitId} = ANY(${unitIds})`
             ));
           
-          const leader = CriteriaScoreService.findClusterLeader(clusterResults);
+          // Get all targets for cluster units
+          const clusterTargets = await db
+            .select()
+            .from(schema.criteriaTargets)
+            .where(and(
+              eq(schema.criteriaTargets.criteriaId, criteriaId),
+              eq(schema.criteriaTargets.periodId, periodId),
+              sql`${schema.criteriaTargets.unitId} = ANY(${unitIds})`
+            ));
+          
+          // Build targets map
+          const targetsMap = new Map<string, number>();
+          clusterTargets.forEach(t => {
+            targetsMap.set(t.unitId, Number(t.targetValue));
+          });
+          
+          const leader = CriteriaScoreService.findClusterLeader(clusterResults, targetsMap);
           leaderActual = leader?.actualValue;
         }
       }
