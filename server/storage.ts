@@ -869,13 +869,13 @@ export class DatabaseStorage implements IStorage {
         status: result?.status || 'draft',
         // Old fields for backwards compatibility (if needed)
         selfScoreFile: result?.evidenceFile || null,
-        review1Score: undefined, // Not yet implemented in new system
+        review1Score: result?.clusterScore ? parseFloat(result.clusterScore) : undefined, // Cluster score = review1
         review1Comment: null,
         review1File: null,
-        review2Score: undefined,
+        review2Score: result?.finalScore ? parseFloat(result.finalScore) : undefined, // Final score = review2
         review2Comment: null,
         review2File: null,
-        finalScore: result?.calculatedScore ? parseFloat(result.calculatedScore) : undefined,
+        finalScore: result?.finalScore ? parseFloat(result.finalScore) : undefined,
       };
 
       // Recursively flatten children, passing current node's ID as their parent

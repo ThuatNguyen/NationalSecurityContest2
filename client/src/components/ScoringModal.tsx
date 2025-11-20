@@ -49,6 +49,7 @@ export default function ScoringModal({
   const [targetValue, setTargetValue] = useState(currentTargetValue?.toString() || "");
   const [actualValue, setActualValue] = useState(currentActualValue?.toString() || "");
   const [previewScore, setPreviewScore] = useState<number | null>(null);
+  const [noTarget, setNoTarget] = useState(currentTargetValue === 0); // Không giao chỉ tiêu
 
   // Type 2 (Định tính) states
   const [achieved, setAchieved] = useState<string>("true"); // "true" or "false"
@@ -67,6 +68,7 @@ export default function ScoringModal({
         setTargetValue(currentTargetValue?.toString() || "");
         setActualValue(currentActualValue?.toString() || "");
         setPreviewScore(null);
+        setNoTarget(currentTargetValue === 0);
       } else if (criteriaType === 2) {
         setAchieved(currentScore === maxScore ? "true" : "false");
       } else {
@@ -80,6 +82,18 @@ export default function ScoringModal({
   useEffect(() => {
     if (criteriaType === 1) {
       const actual = parseFloat(actualValue);
+      
+      // Case 1: No target (checkbox checked) - can't preview without knowing other units
+      if (noTarget) {
+        if (!isNaN(actual) && actual > 0) {
+          setPreviewScore(null); // Can't calculate without cluster comparison
+        } else {
+          setPreviewScore(null);
+        }
+        return;
+      }
+      
+      // Case 2: Has target - calculate preview
       const target = parseFloat(targetValue);
       
       if (!isNaN(target) && target > 0 && !isNaN(actual) && actual >= 0) {
@@ -105,7 +119,7 @@ export default function ScoringModal({
         setPreviewScore(null);
       }
     }
-  }, [targetValue, actualValue, maxScore, criteriaType]);
+  }, [targetValue, actualValue, maxScore, criteriaType, noTarget]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -141,9 +155,12 @@ export default function ScoringModal({
         newErrors.actualValue = "Vui lòng nhập kết quả thực hiện (≥ 0)";
       }
       
-      const target = parseFloat(targetValue);
-      if (!targetValue || isNaN(target) || target <= 0) {
-        newErrors.targetValue = "Vui lòng nhập chỉ tiêu hợp lệ (> 0)";
+      // Validate target value (skip if "no target" is checked)
+      if (!noTarget) {
+        const target = parseFloat(targetValue);
+        if (!targetValue || isNaN(target) || target <= 0) {
+          newErrors.targetValue = "Vui lòng nhập chỉ tiêu hợp lệ (> 0)";
+        }
       }
       
       if (Object.keys(newErrors).length > 0) {
@@ -151,8 +168,11 @@ export default function ScoringModal({
         return;
       }
       
+      // If "no target" is checked, set targetValue to 0
+      const targetToSave = noTarget ? 0 : parseFloat(targetValue);
+      
       onSave({
-        targetValue: target,
+        targetValue: targetToSave,
         actualValue: actual,
         file: file || undefined,
       });
@@ -235,10 +255,34 @@ export default function ScoringModal({
                 Tiêu chí định lượng
               </h4>
               
+              {/* Checkbox: Không giao chỉ tiêu */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="no-target"
+                  checked={noTarget}
+                  onCheckedChange={(checked) => {
+                    setNoTarget(checked as boolean);
+                    if (checked) {
+                      setTargetValue("0");
+                      setErrors(prev => ({ ...prev, targetValue: undefined }));
+                    } else {
+                      setTargetValue("");
+                    }
+                  }}
+                  data-testid="checkbox-no-target"
+                />
+                <Label
+                  htmlFor="no-target"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Tiêu chí không được giao chỉ tiêu
+                </Label>
+              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="target" className="text-sm font-medium">
-                    Chỉ tiêu được giao <span className="text-destructive">*</span>
+                    Chỉ tiêu được giao {!noTarget && <span className="text-destructive">*</span>}
                   </Label>
                   <Input
                     id="target"
@@ -252,6 +296,7 @@ export default function ScoringModal({
                     placeholder="Nhập chỉ tiêu"
                     className={errors.targetValue ? "border-destructive" : ""}
                     data-testid="input-target-value"
+                    disabled={noTarget}
                   />
                   {errors.targetValue && (
                     <p className="text-xs text-destructive flex items-center gap-1">
@@ -287,7 +332,15 @@ export default function ScoringModal({
                 </div>
               </div>
               
-              {previewScore !== null && (
+              {/* Preview score or info message */}
+              {noTarget && actualValue && parseFloat(actualValue) > 0 ? (
+                <Alert className="bg-orange-100 dark:bg-orange-900/30 border-orange-300 dark:border-orange-700">
+                  <AlertCircle className="h-4 w-4 text-orange-700 dark:text-orange-300" />
+                  <AlertDescription className="text-sm text-orange-900 dark:text-orange-100">
+                    Tiêu chí không được giao chỉ tiêu. Điểm sẽ được tính dựa trên so sánh với các đơn vị khác không được giao chỉ tiêu trong cụm (tối đa {maxScore} điểm).
+                  </AlertDescription>
+                </Alert>
+              ) : previewScore !== null && (
                 <Alert className="bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700">
                   <AlertCircle className="h-4 w-4 text-blue-700 dark:text-blue-300" />
                   <AlertDescription className="text-sm font-semibold text-blue-900 dark:text-blue-100">

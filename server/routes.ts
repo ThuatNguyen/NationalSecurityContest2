@@ -25,6 +25,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { CriteriaScoreService } from "./criteriaScoreService";
+import { calculatePreliminaryScore, roundScore } from "./scoreCalculation";
 
 /**
  * Thin helper that delegates to transactional storage method.
@@ -2156,8 +2157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let calculatedScore: number | null = null;
       
       if (criteria.criteriaType === 1) {
-        // Type 1: Định lượng (Quantitative) - actualValue/targetValue × maxScore
-        // Allow overachievement (scores > maxScore are possible)
+        // Type 1: Định lượng (Quantitative) - Use preliminary calculation (formula 1/2 only)
         if (inputData.actualValue !== undefined) {
           // Use the targetValue from input if provided, otherwise look up from database
           let targetVal: number | null = null;
@@ -2182,16 +2182,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
-          if (targetVal !== null && targetVal > 0) {
+          if (targetVal !== null) {
             const actualVal = Number(inputData.actualValue);
             const maxScore = Number(criteria.maxScore);
             
-            // Guard against division by zero and invalid numbers
-            if (!isNaN(actualVal) && !isNaN(maxScore)) {
-              const percentage = actualVal / targetVal;
-              calculatedScore = percentage * maxScore;
-              // Round to 2 decimal places, allow scores > maxScore for overachievement
-              calculatedScore = Math.round(calculatedScore * 100) / 100;
+            // Guard against invalid numbers
+            if (!isNaN(actualVal) && !isNaN(maxScore) && actualVal >= 0) {
+              if (targetVal > 0) {
+                // Case 1: Has target - use preliminary calculation (formula 1/2 only)
+                const preliminaryScore = calculatePreliminaryScore({
+                  actualValue: actualVal,
+                  targetValue: targetVal,
+                  maxScore: maxScore
+                });
+                
+                calculatedScore = roundScore(preliminaryScore);
+              } else if (targetVal === 0 && actualVal > 0) {
+                // Case 2: No target but has result
+                // For preliminary scoring, give a base score (will be recalculated in cluster comparison)
+                // Use 50% of maxScore as placeholder (similar to meeting target exactly)
+                // The actual score will be determined when cluster recalculation runs
+                calculatedScore = Math.round(0.5 * maxScore * 100) / 100;
+              } else {
+                // targetVal = 0 and actualVal = 0 → no score
+                calculatedScore = 0;
+              }
             }
           }
         }
@@ -2405,6 +2420,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await db.update(schema.criteriaResults)
             .set({ 
               calculatedScore: calculatedScore.toString(),
+              clusterScore: calculatedScore.toString(), // Copy to cluster score (review1)
+              finalScore: calculatedScore.toString(),   // Copy to final score (review2)
               updatedAt: new Date(),
             })
             .where(eq(schema.criteriaResults.id, result.id));

@@ -348,10 +348,16 @@ export default function EvaluationPeriods() {
 
       // Call new API
       const res = await apiRequest("POST", "/api/criteria-results", payload);
-      await res.json();
+      const responseData = await res.json();
+      console.log('[SAVE SCORE] Response:', responseData);
 
-      // Refresh data
-      queryClient.invalidateQueries({
+      // Refresh data and wait for it to complete
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/evaluation-periods", selectedPeriod.id, "units", selectedUnitId, "summary"],
+      });
+
+      // Force refetch to ensure data is updated immediately
+      await queryClient.refetchQueries({
         queryKey: ["/api/evaluation-periods", selectedPeriod.id, "units", selectedUnitId, "summary"],
       });
 
@@ -564,7 +570,31 @@ export default function EvaluationPeriods() {
 
       return { result, periodId: currentPeriodId, unitId: currentUnitId };
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      // Step 1: Recalculate scores for the cluster
+      try {
+        console.log("[SUBMIT] Recalculating scores for cluster after submission");
+        const unit = await fetch(`/api/units/${data.unitId}`, { credentials: "include" }).then(r => r.json());
+        
+        if (unit && unit.clusterId) {
+          const recalcRes = await apiRequest("POST", "/api/criteria-results/recalculate", {
+            periodId: data.periodId,
+            clusterId: unit.clusterId,
+          });
+          
+          if (recalcRes.ok) {
+            console.log("[SUBMIT] Scores recalculated successfully");
+            
+            // Step 2: Copy calculatedScore to review1Score and review2Score
+            // This is done on the server side - just need to refresh data
+          }
+        }
+      } catch (error) {
+        console.error("[SUBMIT] Error recalculating scores:", error);
+        // Don't block the submission success, just log the error
+      }
+      
+      // Step 3: Invalidate and refetch to show updated scores
       queryClient.invalidateQueries({
         queryKey: [
           "/api/evaluation-periods",
@@ -574,9 +604,20 @@ export default function EvaluationPeriods() {
           "summary",
         ],
       });
+      
+      await queryClient.refetchQueries({
+        queryKey: [
+          "/api/evaluation-periods",
+          data.periodId,
+          "units",
+          data.unitId,
+          "summary",
+        ],
+      });
+      
       toast({
         title: "Thành công",
-        description: "Đã nộp bài thành công. Đánh giá đang chờ thẩm định.",
+        description: "Đã nộp bài thành công. Điểm đã được tính lại và cập nhật.",
       });
       setSubmitDialogOpen(false);
     },
@@ -1398,7 +1439,12 @@ export default function EvaluationPeriods() {
                                       onClick={() =>
                                         handleOpenScoringModal(item)
                                       }
-                                      className="font-medium text-sm"
+                                      className={`font-medium text-sm ${
+                                        (item.calculatedScore != null && !isNaN(Number(item.calculatedScore))) ||
+                                        (item.selfScore != null && !isNaN(Number(item.selfScore)))
+                                          ? 'text-primary hover:text-primary/80'
+                                          : ''
+                                      }`}
                                       data-testid={`button-selfscore-${item.id}`}
                                     >
                                       {/* Prioritize calculatedScore (auto-calculated), fallback to selfScore */}

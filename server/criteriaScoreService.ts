@@ -253,11 +253,12 @@ export class CriteriaScoreService {
 
   /**
    * Batch calculate scores for all units in a cluster for a specific quantitative criteria
-   * This implements the full algorithm with leader detection and proper formula assignment
+   * SIMPLIFIED FORMULA:
+   * - If A < T: Score = 0.5 × MS × (A/T)
+   * - If A = T: Score = 0.5 × MS
+   * - If A > T and is leader: Score = MS
+   * - If A > T but not leader: Score = 0.5 × MS + 0.5 × MS × ((A/T - 1) / (L/TL - 1))
    * 
-   * NEW: Supports units without targets - they are scored separately based on actual values
-   * 
-   * @param criteriaId - ID của tiêu chí định lượng
    * @param results - Mảng tất cả results của các đơn vị cho tiêu chí này
    * @param targets - Map unitId -> targetValue
    * @param maxScore - Điểm tối đa của tiêu chí
@@ -274,54 +275,73 @@ export class CriteriaScoreService {
     const unitsWithTarget = results.filter(r => (targets.get(r.unitId) || 0) > 0);
     const unitsWithoutTarget = results.filter(r => (targets.get(r.unitId) || 0) === 0);
     
-    // GROUP 1: Đơn vị CÓ target → Tính theo exceed % (logic chuẩn)
+    // GROUP 1: Đơn vị CÓ target
     if (unitsWithTarget.length > 0) {
-      const leader = this.findClusterLeader(unitsWithTarget, targets);
+      // Find units that exceeded target (A > T)
+      const overTargetUnits = unitsWithTarget
+        .filter(r => Number(r.actualValue || 0) > (targets.get(r.unitId) || 0))
+        .map(r => ({
+          unitId: r.unitId,
+          actual: Number(r.actualValue || 0),
+          target: targets.get(r.unitId) || 0,
+          ratio: Number(r.actualValue || 0) / (targets.get(r.unitId) || 1)
+        }));
       
-      if (leader) {
-        for (const result of unitsWithTarget) {
-          const actual = Number(result.actualValue || 0);
-          const target = targets.get(result.unitId) || 0;
-          
-          // Determine formula type for this unit
-          let formulaType: number;
-          
-          if (actual < target) {
-            // Case 1: Not meeting target
-            formulaType = 1;
-          } else if (actual === target) {
-            // Case 2: Meeting target exactly
-            formulaType = 2;
-          } else if (result.unitId === leader.unitId) {
-            // Case 3: Leader (highest exceed %)
-            formulaType = 3;
-          } else {
-            // Case 4: Exceeded but not leader
-            formulaType = 4;
-          }
-          
-          // Calculate score using the appropriate formula
-          const score = this.calculateQuantitativeScore(
-            actual,
-            target,
-            maxScore,
-            formulaType,
-            leader.exceedPercent
-          );
-          
-          scores.set(result.unitId, score);
-        }
-      } else {
-        // No valid leader in group with target
-        for (const result of unitsWithTarget) {
+      // Find leader (highest A/T ratio among over-target units)
+      let leaderRatio = 0;
+      if (overTargetUnits.length > 0) {
+        leaderRatio = Math.max(...overTargetUnits.map(u => u.ratio));
+      }
+      
+      // Calculate score for each unit with target
+      for (const result of unitsWithTarget) {
+        const actual = Number(result.actualValue || 0);
+        const target = targets.get(result.unitId) || 0;
+        
+        if (target === 0 || actual < 0) {
           scores.set(result.unitId, 0);
+          continue;
         }
+        
+        const ratio = actual / target;
+        let score = 0;
+        
+        if (actual < target) {
+          // Formula 1: A < T
+          // Score = 0.5 × MS × (A/T)
+          score = 0.5 * maxScore * ratio;
+        } else if (actual === target) {
+          // Formula 2: A = T
+          // Score = 0.5 × MS
+          score = 0.5 * maxScore;
+        } else {
+          // A > T
+          const epsilon = 0.0001;
+          if (Math.abs(ratio - leaderRatio) < epsilon) {
+            // Formula 3: Leader
+            // Score = MS
+            score = maxScore;
+          } else {
+            // Formula 4: Over target but not leader
+            // Score = 0.5 × MS + 0.5 × MS × ((A/T - 1) / (L/TL - 1))
+            if (leaderRatio > 1) {
+              const baseScore = 0.5 * maxScore;
+              const bonusScore = 0.5 * maxScore * ((ratio - 1) / (leaderRatio - 1));
+              score = baseScore + bonusScore;
+            } else {
+              // Shouldn't happen, but fallback to exact target formula
+              score = 0.5 * maxScore;
+            }
+          }
+        }
+        
+        scores.set(result.unitId, Number(score.toFixed(2)));
       }
     }
     
     // GROUP 2: Đơn vị KHÔNG có target nhưng có kết quả
     // Tính điểm dựa trên tỷ lệ so với đơn vị có actual cao nhất trong nhóm
-    // Giới hạn 100% maxScore (khuyến khích đơn vị làm việc tốt)
+    // Giới hạn 100% maxScore
     if (unitsWithoutTarget.length > 0) {
       // Tìm actual value cao nhất trong nhóm không có target
       let maxActualInGroup = 0;
@@ -337,14 +357,11 @@ export class CriteriaScoreService {
         const actual = Number(result.actualValue || 0);
         
         if (actual === 0) {
-          // Không có kết quả → 0 điểm
           scores.set(result.unitId, 0);
         } else if (maxActualInGroup > 0) {
-          // Có kết quả → Tính theo tỷ lệ
           // Score = (actual / max_actual_in_no_target_group) × maxScore
-          // Giới hạn 100% maxScore (khuyến khích cố gắng)
           const ratio = actual / maxActualInGroup;
-          const score = ratio * maxScore; // 100% max
+          const score = ratio * maxScore;
           scores.set(result.unitId, Number(score.toFixed(2)));
         } else {
           scores.set(result.unitId, 0);
