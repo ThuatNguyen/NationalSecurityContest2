@@ -305,4 +305,98 @@ export function setupCriteriaTreeRoutes(app: Express) {
       next(error);
     }
   });
+  
+  /**
+   * PUT /api/criteria-results/review
+   * Cập nhật điểm thẩm định (cluster_score hoặc final_score) cho tiêu chí
+   */
+  app.put("/api/criteria-results/review", requireRole("cluster_leader", "admin"), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user as any;
+      const { criteriaId, unitId, periodId, reviewType, score, comment } = req.body;
+      
+      if (!criteriaId || !unitId || !periodId || !reviewType) {
+        return res.status(400).json({ message: "Thiếu thông tin bắt buộc" });
+      }
+      
+      if (reviewType !== "review1" && reviewType !== "review2") {
+        return res.status(400).json({ message: "reviewType phải là 'review1' hoặc 'review2'" });
+      }
+      
+      // Cluster leaders can only review their own cluster's units
+      if (user.role === "cluster_leader") {
+        const unit = await db
+          .select()
+          .from(schema.units)
+          .where(eq(schema.units.id, unitId))
+          .limit(1);
+        
+        if (!unit[0] || unit[0].clusterId !== user.clusterId) {
+          return res.status(403).json({ message: "Bạn chỉ có thể thẩm định đơn vị trong cụm của mình" });
+        }
+      }
+      
+      // Tìm hoặc tạo criteria_result
+      const [existing] = await db
+        .select()
+        .from(schema.criteriaResults)
+        .where(and(
+          eq(schema.criteriaResults.criteriaId, criteriaId),
+          eq(schema.criteriaResults.unitId, unitId),
+          eq(schema.criteriaResults.periodId, periodId)
+        ))
+        .limit(1);
+      
+      const updateData: any = {
+        updatedAt: new Date(),
+      };
+      
+      // Cập nhật cột tương ứng với loại thẩm định
+      if (reviewType === "review1") {
+        updateData.clusterScore = score !== undefined && score !== null ? score.toString() : null;
+      } else {
+        updateData.finalScore = score !== undefined && score !== null ? score.toString() : null;
+      }
+      
+      // Update note: allow empty string to clear comment, null/undefined to skip update
+      if (comment !== undefined && comment !== null) {
+        updateData.note = comment.trim() === "" ? null : comment;
+      }
+      
+      let result;
+      if (existing) {
+        // Update existing record
+        const [updated] = await db
+          .update(schema.criteriaResults)
+          .set(updateData)
+          .where(eq(schema.criteriaResults.id, existing.id))
+          .returning();
+        result = updated;
+      } else {
+        // Create new record
+        const insertData: InsertCriteriaResult = {
+          criteriaId,
+          unitId,
+          periodId,
+          clusterScore: reviewType === "review1" ? (score !== undefined && score !== null ? score.toString() : null) : null,
+          finalScore: reviewType === "review2" ? (score !== undefined && score !== null ? score.toString() : null) : null,
+          // Normalize comment: empty string becomes null, undefined/null skipped
+          note: (comment !== undefined && comment !== null) 
+            ? (comment.trim() === "" ? null : comment)
+            : undefined,
+        };
+        
+        const [created] = await db
+          .insert(schema.criteriaResults)
+          .values(insertData)
+          .returning();
+        result = created;
+      }
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error updating review score:", error);
+      next(error);
+    }
+  });
 }

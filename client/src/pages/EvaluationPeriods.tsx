@@ -606,6 +606,82 @@ export default function EvaluationPeriods() {
     });
   };
 
+  // Mutation for saving qualitative review scores to criteria_results table
+  const saveQualitativeReviewMutation = useMutation({
+    mutationFn: async ({
+      score,
+      comment,
+      criteriaId,
+      reviewType,
+    }: {
+      score: number;
+      comment: string;
+      criteriaId: string;
+      reviewType: "review1" | "review2";
+    }) => {
+      const currentPeriodId = selectedPeriod?.id;
+      const currentUnitId = selectedUnitId;
+
+      if (!currentPeriodId || !currentUnitId) {
+        throw new Error("Thiếu thông tin kỳ thi đua hoặc đơn vị");
+      }
+
+      console.log("[QUALITATIVE REVIEW] Calling /api/criteria-results/review:", {
+        criteriaId,
+        unitId: currentUnitId,
+        periodId: currentPeriodId,
+        reviewType,
+        score,
+        comment,
+      });
+
+      const res = await apiRequest(
+        "PUT",
+        "/api/criteria-results/review",
+        {
+          criteriaId,
+          unitId: currentUnitId,
+          periodId: currentPeriodId,
+          reviewType,
+          score,
+          comment,
+        },
+      );
+      const result = await res.json();
+      console.log("[QUALITATIVE REVIEW] Save successful, result:", result);
+
+      return { result, periodId: currentPeriodId, unitId: currentUnitId };
+    },
+    onSuccess: (data) => {
+      console.log(
+        "[QUALITATIVE REVIEW] onSuccess, invalidating cache for:",
+        data.periodId,
+        data.unitId,
+      );
+      queryClient.invalidateQueries({
+        queryKey: [
+          "/api/evaluation-periods",
+          data.periodId,
+          "units",
+          data.unitId,
+          "summary",
+        ],
+      });
+      toast({
+        title: "Thành công",
+        description: "Đã lưu điểm thẩm định thành công",
+      });
+      setQualitativeReviewModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể lưu điểm thẩm định",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Handler for qualitative review (no file upload)
   const handleSaveQualitativeReview = (score: number, comment: string) => {
     if (!selectedCriteria) return;
@@ -618,13 +694,11 @@ export default function EvaluationPeriods() {
       reviewType,
     });
 
-    saveReviewMutation.mutate({
+    saveQualitativeReviewMutation.mutate({
       score,
       comment,
-      file: null,
       criteriaId: selectedCriteria.id,
       reviewType,
-      existingFileUrl: null,
     });
   };
 
