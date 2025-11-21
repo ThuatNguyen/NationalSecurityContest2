@@ -1110,7 +1110,7 @@ export class DatabaseStorage implements IStorage {
       // Override with actual results where they exist
       criteriaResults.forEach(result => {
         if (result.unitId === unit.id && scoresByCriteria[result.criteriaId]) {
-          scoresByCriteria[result.criteriaId].selfScore = result.calculatedScore ? parseFloat(result.calculatedScore) : null;
+          scoresByCriteria[result.criteriaId].selfScore = result.selfScore ? parseFloat(result.selfScore) : null;
           scoresByCriteria[result.criteriaId].clusterScore = result.clusterScore ? parseFloat(result.clusterScore) : null;
           scoresByCriteria[result.criteriaId].hasResult = true; // Có kết quả rồi
           

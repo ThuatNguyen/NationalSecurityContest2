@@ -2181,75 +2181,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // AUTO-CALCULATION: Calculate score based on criteria type
-      let calculatedScore: number | null = null;
-      
-      if (criteria.criteriaType === 1) {
-        // Type 1: Định lượng (Quantitative) - Use preliminary calculation (formula 1/2 only)
-        if (inputData.actualValue !== undefined) {
-          // Use the targetValue from input if provided, otherwise look up from database
-          let targetVal: number | null = null;
-          
-          if (inputData.targetValue !== undefined) {
-            targetVal = Number(inputData.targetValue);
-          } else {
-            // Look up the assigned target for this unit+criteria+period
-            const targetRows = await db.select()
-              .from(schema.criteriaTargets)
-              .where(
-                and(
-                  eq(schema.criteriaTargets.criteriaId, inputData.criteriaId),
-                  eq(schema.criteriaTargets.unitId, inputData.unitId),
-                  eq(schema.criteriaTargets.periodId, inputData.periodId)
-                )
-              )
-              .limit(1);
-            
-            if (targetRows.length > 0) {
-              targetVal = Number(targetRows[0].targetValue);
-            }
-          }
-          
-          if (targetVal !== null) {
-            const actualVal = Number(inputData.actualValue);
-            const maxScore = Number(criteria.maxScore);
-            
-            // Guard against invalid numbers
-            if (!isNaN(actualVal) && !isNaN(maxScore) && actualVal >= 0) {
-              if (targetVal > 0) {
-                // Case 1: Has target - use preliminary calculation (formula 1/2 only)
-                const preliminaryScore = calculatePreliminaryScore({
-                  actualValue: actualVal,
-                  targetValue: targetVal,
-                  maxScore: maxScore
-                });
-                
-                calculatedScore = roundScore(preliminaryScore);
-              } else if (targetVal === 0 && actualVal > 0) {
-                // Case 2: No target but has result
-                // For preliminary scoring, give a base score (will be recalculated in cluster comparison)
-                // Use 50% of maxScore as placeholder (similar to meeting target exactly)
-                // The actual score will be determined when cluster recalculation runs
-                calculatedScore = Math.round(0.5 * maxScore * 100) / 100;
-              } else {
-                // targetVal = 0 and actualVal = 0 → no score
-                calculatedScore = 0;
-              }
-            }
-          }
-        }
-      } else if (criteria.criteriaType === 2) {
-        // Type 2: Định tính (Qualitative) - achieved=maxScore, not achieved=0
-        // Frontend sends: selfScore = maxScore (achieved) or 0 (not achieved)
-        // We simply use the selfScore value as the calculatedScore
-        if (inputData.selfScore !== undefined) {
-          const selfScoreVal = Number(inputData.selfScore);
-          // If selfScore > 0, consider it achieved (= maxScore)
-          // If selfScore = 0, consider it not achieved (= 0)
-          calculatedScore = selfScoreVal > 0 ? Number(criteria.maxScore) : 0;
-        }
-      }
-      // Type 3 & 4: No auto-calculation needed, user enters score directly
+      // For Type 1 (Quantitative): Frontend now calculates selfScore
+      // Backend no longer calculates preliminary score
+      // Just validate and save the data
 
       // Convert numbers to strings for Drizzle decimal fields
       const resultData: any = {
@@ -2259,11 +2193,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         note: inputData.note,
         // Don't set status here - let storage.upsertCriteriaResult handle it
       };
-      
-      // Set calculatedScore if we computed one
-      if (calculatedScore !== null) {
-        resultData.calculatedScore = calculatedScore.toString();
-      }
       
       // Allow explicit null to clear evidenceFile
       if (inputData.evidenceFile !== undefined) {
@@ -2278,9 +2207,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (inputData.actualValue !== undefined) {
         resultData.actualValue = inputData.actualValue.toString();
       }
+      
+      // For Type 1: selfScore is calculated on frontend and sent in payload
+      // For Type 2, 3, 4: selfScore is directly from user input
       if (inputData.selfScore !== undefined) {
         resultData.selfScore = inputData.selfScore.toString();
       }
+      
       if (inputData.bonusCount !== undefined) {
         resultData.bonusCount = inputData.bonusCount;
       }
@@ -2457,11 +2390,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           console.log("[RECALCULATE] Updating result ID:", result.id.substring(0, 8), "Score:", calculatedScore);
           
-          // Only update calculatedScore - DO NOT overwrite review scores (clusterScore/finalScore)
-          // Review scores should only be set by reviewers through the review modal
+          // Only update clusterScore (review1/thẩm định lần 1)
+          // selfScore remains unchanged - preserves user's preliminary self-assessment
+          // clusterScore = calculated score after cluster comparison (auto-review by leader)
+          // Note: finalScore (review2) remains unchanged - still needs admin manual review
           await db.update(schema.criteriaResults)
             .set({ 
-              calculatedScore: calculatedScore.toString(),
+              clusterScore: calculatedScore.toString(),     // Update only thẩm định lần 1
               updatedAt: new Date(),
             })
             .where(eq(schema.criteriaResults.id, result.id));

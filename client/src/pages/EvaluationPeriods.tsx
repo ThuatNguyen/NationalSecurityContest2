@@ -412,9 +412,38 @@ export default function EvaluationPeriods() {
       };
 
       if (criteriaType === 1) {
-        // Type 1: Quantitative
+        // Type 1: Quantitative - Calculate preliminary score on frontend
         payload.targetValue = data.targetValue;
         payload.actualValue = data.actualValue;
+        
+        // Calculate preliminary score using frontend logic
+        const A = data.actualValue || 0;
+        const T = data.targetValue || 0;
+        const MS = selectedCriteria.maxScore;
+        let preliminaryScore = 0;
+        
+        if (T > 0 && A >= 0) {
+          // Unit has target - use standard formulas
+          if (A < T) {
+            // Formula 1: A < T → Score = 0.5 × MS × (A/T)
+            preliminaryScore = 0.5 * MS * (A / T);
+          } else if (A === T) {
+            // Formula 2: A = T → Score = 0.5 × MS
+            preliminaryScore = 0.5 * MS;
+          } else {
+            // Formula 3: A > T → Score = MS
+            preliminaryScore = MS;
+          }
+        } else if (T === 0 && A > 0) {
+          // Unit has NO target but has actual result
+          // Temporarily give full score (MS) to encourage effort
+          // Will be recalculated accurately during "Tính lại điểm cụm" 
+          // based on ratio to highest actual in no-target group
+          preliminaryScore = MS;
+        }
+        
+        // Round to 2 decimal places
+        payload.selfScore = Math.round(preliminaryScore * 100) / 100;
       } else if (criteriaType === 2) {
         // Type 2: Qualitative  
         payload.selfScore = data.achieved ? selectedCriteria.maxScore : 0;
@@ -876,11 +905,9 @@ export default function EvaluationPeriods() {
     recalculateScoresMutation.mutate();
   };
 
-  // Helper: Get display score (prioritize calculatedScore, fallback to selfScore)
+  // Helper: Get display score (ONLY from selfScore for self-scoring column)
   const getDisplayScore = (item: Criteria): number => {
-    if (item.calculatedScore != null && !isNaN(Number(item.calculatedScore))) {
-      return Number(item.calculatedScore);
-    }
+    // Only use selfScore for display in "Điểm tự chấm" column
     if (item.selfScore != null && !isNaN(Number(item.selfScore))) {
       return Number(item.selfScore);
     }
@@ -1626,12 +1653,9 @@ export default function EvaluationPeriods() {
                                       }`}
                                       data-testid={`button-selfscore-${item.id}`}
                                     >
-                                      {/* Prioritize calculatedScore (auto-calculated), fallback to selfScore */}
-                                      {item.calculatedScore != null &&
-                                      !isNaN(Number(item.calculatedScore))
-                                        ? Number(item.calculatedScore).toFixed(2)
-                                        : item.selfScore != null &&
-                                          !isNaN(Number(item.selfScore))
+                                      {/* Display only selfScore */}
+                                      {item.selfScore != null &&
+                                      !isNaN(Number(item.selfScore))
                                         ? Number(item.selfScore).toFixed(2)
                                         : "Chấm điểm"}
                                     </Button>
@@ -1641,12 +1665,9 @@ export default function EvaluationPeriods() {
                                       className="font-medium text-sm"
                                       data-testid={`text-selfscore-${item.id}`}
                                     >
-                                      {/* Prioritize calculatedScore (auto-calculated), fallback to selfScore */}
-                                      {item.calculatedScore != null &&
-                                      !isNaN(Number(item.calculatedScore))
-                                        ? Number(item.calculatedScore).toFixed(2)
-                                        : item.selfScore != null &&
-                                          !isNaN(Number(item.selfScore))
+                                      {/* Display only selfScore */}
+                                      {item.selfScore != null &&
+                                      !isNaN(Number(item.selfScore))
                                         ? Number(item.selfScore).toFixed(2)
                                         : "-"}
                                     </span>
