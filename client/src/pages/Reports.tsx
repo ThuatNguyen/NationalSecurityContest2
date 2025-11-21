@@ -123,9 +123,15 @@ export default function Reports() {
   };
 
   const totalUnits = scores?.length || 0;
-  const completedUnits = scores?.filter(s => s.status === "finalized").length || 0;
+  const completedUnits = scores?.filter(s => 
+    s.status === "finalized" || 
+    s.status === "submitted" || 
+    s.status === "review1_completed" || 
+    s.status === "review2_completed" ||
+    s.status === "explanation_submitted"
+  ).length || 0;
   const averageScore = totalUnits > 0 
-    ? scores!.reduce((sum, s) => sum + s.approvedScore, 0) / totalUnits 
+    ? scores!.reduce((sum, s) => sum + s.clusterScore, 0) / totalUnits 
     : 0;
 
   const handleExport = async () => {
@@ -254,10 +260,7 @@ export default function Reports() {
                         Tự chấm
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-32">
-                        Cụm chấm
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-32">
-                        Điểm duyệt
+                        Thẩm định
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-32">
                         Tỷ lệ
@@ -287,14 +290,15 @@ export default function Reports() {
                             : '-'}
                         </td>
                         <td className="px-4 py-3 text-center text-sm font-medium" data-testid={`text-clusterscore-${score.unitId}`}>
-                          {score.clusterScore > 0 ? score.clusterScore.toFixed(1) : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-center text-sm font-bold" data-testid={`text-approvedscore-${score.unitId}`}>
-                          {score.approvedScore > 0 ? score.approvedScore.toFixed(1) : '-'}
+                          {score.clusterScore > 0 && score.maxScoreAssigned != null
+                            ? `${score.clusterScore.toFixed(1)}/${score.maxScoreAssigned.toFixed(1)}` 
+                            : score.clusterScore > 0 
+                            ? score.clusterScore.toFixed(1)
+                            : '-'}
                         </td>
                         <td className="px-4 py-3 text-center text-sm text-muted-foreground">
-                          {score.selfScore > 0 && score.maxScoreAssigned != null && score.maxScoreAssigned > 0
-                            ? `${((score.selfScore / score.maxScoreAssigned) * 100).toFixed(1)}%`
+                          {score.clusterScore > 0 && score.maxScoreAssigned != null && score.maxScoreAssigned > 0
+                            ? `${((score.clusterScore / score.maxScoreAssigned) * 100).toFixed(1)}%`
                             : '-'}
                         </td>
                         <td className="px-4 py-3 text-center text-sm font-medium">
@@ -373,10 +377,7 @@ export default function Reports() {
                   Tự chấm
                 </th>
                 <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-24">
-                  Cụm chấm
-                </th>
-                <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-24">
-                  Điểm duyệt
+                  Thẩm định
                 </th>
                 <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-20">
                   Tỷ lệ
@@ -404,14 +405,15 @@ export default function Reports() {
                         : '-'}
                     </td>
                     <td className="border px-2 py-2 text-center text-sm">
-                      {score.clusterScore > 0 ? score.clusterScore.toFixed(1) : '-'}
-                    </td>
-                    <td className="border px-2 py-2 text-center text-sm font-bold">
-                      {score.approvedScore > 0 ? score.approvedScore.toFixed(1) : '-'}
+                      {score.clusterScore > 0 && score.maxScoreAssigned != null
+                        ? `${score.clusterScore.toFixed(1)}/${score.maxScoreAssigned.toFixed(1)}` 
+                        : score.clusterScore > 0 
+                        ? score.clusterScore.toFixed(1)
+                        : '-'}
                     </td>
                     <td className="border px-2 py-2 text-center text-sm">
-                      {score.selfScore > 0 && score.maxScoreAssigned != null && score.maxScoreAssigned > 0
-                        ? `${((score.selfScore / score.maxScoreAssigned) * 100).toFixed(1)}%`
+                      {score.clusterScore > 0 && score.maxScoreAssigned != null && score.maxScoreAssigned > 0
+                        ? `${((score.clusterScore / score.maxScoreAssigned) * 100).toFixed(1)}%`
                         : '-'}
                     </td>
                     <td className="border px-2 py-2 text-center text-sm font-semibold">

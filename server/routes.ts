@@ -2565,10 +2565,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
 
-      // Calculate ranking based on percentage (approvedScore / maxScoreAssigned), descending
+      // Calculate ranking based on percentage (clusterScore / maxScoreAssigned), descending
       const sortedData = [...summaryData].sort((a, b) => {
-        const percentA = a.maxScoreAssigned > 0 ? (a.approvedScore / a.maxScoreAssigned) : 0;
-        const percentB = b.maxScoreAssigned > 0 ? (b.approvedScore / b.maxScoreAssigned) : 0;
+        const percentA = a.maxScoreAssigned > 0 ? (a.clusterScore / a.maxScoreAssigned) : 0;
+        const percentB = b.maxScoreAssigned > 0 ? (b.clusterScore / b.maxScoreAssigned) : 0;
         return percentB - percentA; // Higher percentage = better rank
       });
       
