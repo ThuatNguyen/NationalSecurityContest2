@@ -1530,12 +1530,6 @@ export default function EvaluationPeriods() {
                     >
                       Thẩm định lần 2
                     </th>
-                    <th
-                      className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-32"
-                      rowSpan={2}
-                    >
-                      Điểm cuối cùng
-                    </th>
                   </tr>
                   <tr className="border-b">
                     <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide w-24 border-l">
@@ -1701,7 +1695,7 @@ export default function EvaluationPeriods() {
                                     >
                                       {childrenReview1ScoreTotal > 0 ? childrenReview1ScoreTotal.toFixed(2) : '-'}
                                     </span>
-                                  ) : canReview1 ? (
+                                  ) : canReview1 && user.role === "cluster_leader" ? (
                                     // Review permission: Show score if exists, otherwise show button
                                     item.review1Score != null && !isNaN(Number(item.review1Score)) ? (
                                       // Already reviewed - show score as clickable text (can re-review)
@@ -1756,7 +1750,7 @@ export default function EvaluationPeriods() {
                                     >
                                       {childrenReview2ScoreTotal > 0 ? childrenReview2ScoreTotal.toFixed(2) : '-'}
                                     </span>
-                                  ) : canReview2 ? (
+                                  ) : canReview2 && user.role === "admin" ? (
                                     // Review permission: Show score if exists, otherwise show button
                                     item.review2Score != null && !isNaN(Number(item.review2Score)) ? (
                                       // Already reviewed - show score as clickable text (can re-review)
@@ -1794,27 +1788,6 @@ export default function EvaluationPeriods() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3 text-center">
-                                  {isParentNode ? (
-                                    // Parent node - show sum of children's final scores
-                                    <span
-                                      className="font-bold text-sm text-primary"
-                                      data-testid={`text-finalscore-total-${item.id}`}
-                                    >
-                                      {childrenFinalScoreTotal > 0 ? childrenFinalScoreTotal.toFixed(2) : '-'}
-                                    </span>
-                                  ) : (
-                                    <span
-                                      className="font-bold text-sm text-primary"
-                                      data-testid={`text-finalscore-${item.id}`}
-                                    >
-                                      {item.finalScore != null &&
-                                      !isNaN(Number(item.finalScore))
-                                        ? Number(item.finalScore).toFixed(2)
-                                        : "-"}
-                                    </span>
-                                  )}
-                                </td>
                               </tr>
                             );
                           })}
@@ -1844,9 +1817,6 @@ export default function EvaluationPeriods() {
                     <td className="px-4 py-3 text-sm text-center"></td>
                     <td className="px-4 py-3 text-sm text-center border-l">
                       {calculateOverallTotal("review2Score").toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-center text-primary">
-                      {calculateOverallTotal("finalScore").toFixed(2)}
                     </td>
                   </tr>
                 </tbody>
@@ -2005,9 +1975,6 @@ export default function EvaluationPeriods() {
                 <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-20">
                   Thẩm định lần 2
                 </th>
-                <th className="border px-2 py-2 text-center text-xs font-semibold uppercase w-20">
-                  Điểm cuối cùng
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -2072,13 +2039,6 @@ export default function EvaluationPeriods() {
                           childrenReview2ScoreTotal > 0 ? childrenReview2ScoreTotal.toFixed(2) : '-'
                         ) : (
                           item.review2Score?.toFixed(2) || '-'
-                        )}
-                      </td>
-                      <td className="border px-2 py-2 text-sm text-center font-medium">
-                        {isParentNode ? (
-                          childrenFinalScoreTotal > 0 ? childrenFinalScoreTotal.toFixed(2) : '-'
-                        ) : (
-                          item.finalScore?.toFixed(2) || '-'
                         )}
                       </td>
                     </tr>

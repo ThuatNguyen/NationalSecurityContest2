@@ -5,28 +5,71 @@ import { Building2, Users, CheckCircle, TrendingUp, AlertCircle } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 
 interface DashboardProps {
   role: "admin" | "cluster_leader" | "user";
 }
 
+interface Unit {
+  id: string;
+  name: string;
+  clusterId: string;
+}
+
+interface Evaluation {
+  id: string;
+  unitId: string;
+  status: string;
+}
+
 export default function Dashboard({ role }: DashboardProps) {
   const [, setLocation] = useLocation();
   
+  // Fetch all units in the system
+  const { data: units = [] } = useQuery<Unit[]>({
+    queryKey: ["/api/units"],
+    queryFn: async () => {
+      const res = await fetch("/api/units", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch units");
+      return res.json();
+    },
+  });
+
+  // Fetch all evaluations to calculate submitted count
+  const { data: evaluations = [] } = useQuery<Evaluation[]>({
+    queryKey: ["/api/evaluations"],
+    queryFn: async () => {
+      const res = await fetch("/api/evaluations", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch evaluations");
+      return res.json();
+    },
+  });
+
+  const totalUnits = units.length;
+  const submittedCount = evaluations.filter(e => 
+    e.status === "submitted" || 
+    e.status === "review1_completed" || 
+    e.status === "review2_completed" ||
+    e.status === "explanation_submitted" ||
+    e.status === "finalized"
+  ).length;
+  const submittedPercent = totalUnits > 0 ? ((submittedCount / totalUnits) * 100).toFixed(1) : "0.0";
+
   const stats = [
     {
-      title: role === "admin" ? "Tổng số đơn vị" : "Đơn vị trong cụm",
-      value: role === "admin" ? "48" : "12",
+      title: "Tổng số đơn vị",
+      value: totalUnits.toString(),
       icon: Building2,
-      trend: "+3 so với kỳ trước",
+      trend: "Trong hệ thống",
       trendUp: true,
       testId: "stat-units"
     },
     {
       title: "Đã tự chấm",
-      value: role === "admin" ? "42" : role === "cluster_leader" ? "10" : "Hoàn thành",
+      value: `${submittedCount}/${totalUnits}`,
       icon: CheckCircle,
-      trend: "87.5% hoàn thành",
+      trend: `${submittedPercent}% hoàn thành`,
       trendUp: true,
       testId: "stat-self-scored"
     },
