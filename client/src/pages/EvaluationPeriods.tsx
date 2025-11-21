@@ -20,6 +20,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -96,6 +104,7 @@ export default function EvaluationPeriods() {
   const [scoringModalOpen, setScoringModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [qualitativeReviewModalOpen, setQualitativeReviewModalOpen] = useState(false);
+  const [explanationModalOpen, setExplanationModalOpen] = useState(false);
   const [selectedCriteria, setSelectedCriteria] = useState<Criteria | null>(
     null,
   );
@@ -351,6 +360,11 @@ export default function EvaluationPeriods() {
   const handleOpenScoringModal = useCallback((criteria: Criteria) => {
     setSelectedCriteria(criteria);
     setScoringModalOpen(true);
+  }, []);
+
+  const handleOpenExplanationModal = useCallback((criteria: Criteria) => {
+    setSelectedCriteria(criteria);
+    setExplanationModalOpen(true);
   }, []);
 
   const handleOpenReviewModal = useCallback((
@@ -732,6 +746,19 @@ export default function EvaluationPeriods() {
   };
 
   // Mutation for submitting evaluation
+  const handleSaveExplanation = async (data: {
+    comment: string;
+    file?: string;
+  }) => {
+    // TODO: Implement explanation save logic
+    console.log("Explanation saved:", data);
+    setExplanationModalOpen(false);
+    toast({
+      title: "Thành công",
+      description: "Lưu giải trình thành công",
+    });
+  };
+
   const submitEvaluationMutation = useMutation({
     mutationFn: async () => {
       // Validate context
@@ -1513,13 +1540,13 @@ export default function EvaluationPeriods() {
                       Điểm tự chấm
                     </th>
                     <th
-                      className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-32 border-l"
-                      rowSpan={2}
+                      className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide border-l"
+                      colSpan={2}
                     >
                       Thẩm định lần 1
                     </th>
                     <th
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide min-w-[200px]"
+                      className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide w-40 border-l"
                       rowSpan={2}
                     >
                       Giải trình
@@ -1537,6 +1564,12 @@ export default function EvaluationPeriods() {
                     </th>
                     <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide w-24">
                       File
+                    </th>
+                    <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide w-24 border-l">
+                      Điểm
+                    </th>
+                    <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide w-40">
+                      Nhận xét
                     </th>
                   </tr>
                 </thead>
@@ -1695,7 +1728,9 @@ export default function EvaluationPeriods() {
                                     >
                                       {childrenReview1ScoreTotal > 0 ? childrenReview1ScoreTotal.toFixed(2) : '-'}
                                     </span>
-                                  ) : canReview1 && user.role === "cluster_leader" ? (
+                                  ) : canReview1 && user.role === "cluster_leader" && 
+                                       summary.evaluation?.status !== "draft" &&
+                                       item.selfScore != null && !isNaN(Number(item.selfScore)) ? (
                                     // Review permission: Show score if exists, otherwise show button
                                     item.review1Score != null && !isNaN(Number(item.review1Score)) ? (
                                       // Already reviewed - show score as clickable text (can re-review)
@@ -1733,13 +1768,43 @@ export default function EvaluationPeriods() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-3 text-center">
                                   <span
                                     className="text-sm text-muted-foreground"
-                                    data-testid={`text-explanation-${item.id}`}
+                                    data-testid={`text-review1-comment-${item.id}`}
                                   >
                                     {item.review1Comment || "-"}
                                   </span>
+                                </td>
+                                <td className="px-4 py-3 text-center border-l">
+                                  {isParentNode ? (
+                                    <span className="text-xs text-muted-foreground">-</span>
+                                  ) : (() => {
+                                    // Chỉ hiển thị nút giải trình khi:
+                                    // 1. Tiêu chí có type = 2, 3, hoặc 4
+                                    // 2. Có nhận xét thẩm định HOẶC điểm tự chấm khác điểm thẩm định lần 1
+                                    const isQualifiableType = item.criteriaType === 2 || item.criteriaType === 3 || item.criteriaType === 4;
+                                    const hasReviewComment = item.review1Comment && item.review1Comment.trim() !== "";
+                                    const scoresDiffer = item.selfScore != null && 
+                                                        item.review1Score != null && 
+                                                        Number(item.selfScore) !== Number(item.review1Score);
+                                    
+                                    const shouldShowExplanation = isQualifiableType && (hasReviewComment || scoresDiffer);
+                                    
+                                    return shouldShowExplanation ? (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenExplanationModal(item)}
+                                        className="text-xs"
+                                        data-testid={`button-explanation-${item.id}`}
+                                      >
+                                        Giải trình
+                                      </Button>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">-</span>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="px-4 py-3 text-center border-l">
                                   {isParentNode ? (
@@ -1750,7 +1815,9 @@ export default function EvaluationPeriods() {
                                     >
                                       {childrenReview2ScoreTotal > 0 ? childrenReview2ScoreTotal.toFixed(2) : '-'}
                                     </span>
-                                  ) : canReview2 && user.role === "admin" ? (
+                                  ) : canReview2 && user.role === "admin" && 
+                                       summary.evaluation?.status !== "draft" &&
+                                       item.selfScore != null && !isNaN(Number(item.selfScore)) ? (
                                     // Review permission: Show score if exists, otherwise show button
                                     item.review2Score != null && !isNaN(Number(item.review2Score)) ? (
                                       // Already reviewed - show score as clickable text (can re-review)
@@ -1815,6 +1882,7 @@ export default function EvaluationPeriods() {
                       {calculateOverallTotal("review1Score").toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-sm text-center"></td>
+                    <td className="px-4 py-3 text-sm text-center border-l"></td>
                     <td className="px-4 py-3 text-sm text-center border-l">
                       {calculateOverallTotal("review2Score").toFixed(2)}
                     </td>
@@ -1926,6 +1994,42 @@ export default function EvaluationPeriods() {
                 reviewType={reviewType}
                 onSave={handleSaveQualitativeReview}
               />
+              <Dialog open={explanationModalOpen} onOpenChange={setExplanationModalOpen}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Giải trình</DialogTitle>
+                    <DialogDescription>
+                      Nhập ý kiến giải trình cho tiêu chí: {selectedCriteria?.name}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium">Ý kiến giải trình</label>
+                      <textarea 
+                        className="w-full mt-1 p-2 border rounded-md"
+                        rows={4}
+                        placeholder="Nhập ý kiến giải trình..."
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">File đính kèm</label>
+                      <input
+                        type="file"
+                        className="w-full mt-1 p-2 border rounded-md"
+                        accept=".pdf,.doc,.docx,.jpg,.png"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setExplanationModalOpen(false)}>
+                      Hủy
+                    </Button>
+                    <Button onClick={() => handleSaveExplanation({ comment: "Giải trình test" })}>
+                      Lưu
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </>
           )}
         </>
