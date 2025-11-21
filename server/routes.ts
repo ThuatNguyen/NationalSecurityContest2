@@ -2212,6 +2212,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For Type 2, 3, 4: selfScore is directly from user input
       if (inputData.selfScore !== undefined) {
         resultData.selfScore = inputData.selfScore.toString();
+        
+        // Special handling for Type 2 (Qualitative): If user reports NOT achieved (score = 0)
+        // Auto-update clusterScore and finalScore as well
+        if (criteria.criteriaType === 2 && inputData.selfScore === 0) {
+          resultData.clusterScore = "0";
+          resultData.finalScore = "0";
+          console.log("[CRITERIA RESULT] Type 2 not achieved - auto-updating all review scores to 0");
+        }
       }
       
       if (inputData.bonusCount !== undefined) {
@@ -2390,13 +2398,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           console.log("[RECALCULATE] Updating result ID:", result.id.substring(0, 8), "Score:", calculatedScore);
           
-          // Only update clusterScore (review1/thẩm định lần 1)
+          // Update both clusterScore (review1) and finalScore (review2)
           // selfScore remains unchanged - preserves user's preliminary self-assessment
-          // clusterScore = calculated score after cluster comparison (auto-review by leader)
-          // Note: finalScore (review2) remains unchanged - still needs admin manual review
+          // clusterScore = thẩm định lần 1 (calculated score after cluster comparison)
+          // finalScore = thẩm định lần 2 (auto-approved with same value)
           await db.update(schema.criteriaResults)
             .set({ 
-              clusterScore: calculatedScore.toString(),     // Update only thẩm định lần 1
+              clusterScore: calculatedScore.toString(),     // Update thẩm định lần 1
+              finalScore: calculatedScore.toString(),       // Update thẩm định lần 2
               updatedAt: new Date(),
             })
             .where(eq(schema.criteriaResults.id, result.id));
