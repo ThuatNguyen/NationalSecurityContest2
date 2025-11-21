@@ -2515,18 +2515,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const unitResults = criteriaResults.filter(r => r.unitId === unit.id);
         
         // Sum all scores from criteriaResults
-        // selfScore (điểm tự chấm) = calculatedScore (điểm đơn vị tự tính/nhập)
-        // clusterScore = điểm cụm chấm
-        // approvedScore = finalScore or clusterScore or calculatedScore (priority order)
+        // selfScore (điểm tự chấm) = from selfScore field
+        // clusterScore = điểm cụm chấm (thẩm định lần 1)
+        // approvedScore = finalScore or clusterScore or selfScore (priority order)
         const selfScore = unitResults.reduce((sum, r) => 
-          sum + (r.calculatedScore ? parseFloat(r.calculatedScore) : 0), 0);
+          sum + (r.selfScore ? parseFloat(r.selfScore) : 0), 0);
         const clusterScore = unitResults.reduce((sum, r) => 
           sum + (r.clusterScore ? parseFloat(r.clusterScore) : 0), 0);
         const approvedScore = unitResults.reduce((sum, r) => {
-          // Priority: finalScore > clusterScore > calculatedScore
+          // Priority: finalScore > clusterScore > selfScore
           const score = r.finalScore ? parseFloat(r.finalScore) 
                       : r.clusterScore ? parseFloat(r.clusterScore)
-                      : r.calculatedScore ? parseFloat(r.calculatedScore)
+                      : r.selfScore ? parseFloat(r.selfScore)
                       : 0;
           return sum + score;
         }, 0);
@@ -2565,8 +2565,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
 
-      // Calculate ranking based on approvedScore (descending)
-      const sortedData = [...summaryData].sort((a, b) => b.approvedScore - a.approvedScore);
+      // Calculate ranking based on percentage (approvedScore / maxScoreAssigned), descending
+      const sortedData = [...summaryData].sort((a, b) => {
+        const percentA = a.maxScoreAssigned > 0 ? (a.approvedScore / a.maxScoreAssigned) : 0;
+        const percentB = b.maxScoreAssigned > 0 ? (b.approvedScore / b.maxScoreAssigned) : 0;
+        return percentB - percentA; // Higher percentage = better rank
+      });
+      
       const rankedData = summaryData.map(item => {
         const rank = sortedData.findIndex(s => s.unitId === item.unitId) + 1;
         return { ...item, ranking: rank };

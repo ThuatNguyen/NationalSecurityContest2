@@ -4,12 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, CheckCircle, TrendingUp, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { useLocation } from "wouter";
 
 interface DashboardProps {
   role: "admin" | "cluster_leader" | "user";
 }
 
 export default function Dashboard({ role }: DashboardProps) {
+  const [, setLocation] = useLocation();
+  
   const stats = [
     {
       title: role === "admin" ? "Tổng số đơn vị" : "Đơn vị trong cụm",
@@ -125,7 +128,12 @@ export default function Dashboard({ role }: DashboardProps) {
                 <p className="text-sm text-muted-foreground mb-4">
                   Hạn chót nộp điểm tự chấm là ngày 22/12/2025. Vui lòng hoàn thành đúng thời hạn.
                 </p>
-                <Button data-testid="button-start-scoring">Bắt đầu chấm điểm</Button>
+                <Button 
+                  data-testid="button-start-scoring"
+                  onClick={() => setLocation("/periods")}
+                >
+                  Bắt đầu chấm điểm
+                </Button>
               </div>
             </div>
           </CardContent>
