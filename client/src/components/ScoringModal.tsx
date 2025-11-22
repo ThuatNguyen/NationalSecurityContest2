@@ -109,7 +109,7 @@ export default function ScoringModal({
           // Case 3/4: A > T → Need leader detection (show range)
           // Minimum: 0.5 × MS + small exceed%
           // Maximum: MS (if this unit is leader)
-          calculated = 0.5 * maxScore; // Show minimum for now
+          calculated = maxScore; // Show minimum for now
         }
         
         // Round to 2 decimals (match backend logic exactly)
