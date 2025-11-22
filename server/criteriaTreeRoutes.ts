@@ -71,11 +71,24 @@ export function setupCriteriaTreeRoutes(app: Express) {
   
   /**
    * POST /api/criteria
-   * Tạo tiêu chí mới (admin only)
+   * Tạo tiêu chí mới (admin và cluster_leader)
    */
-  app.post("/api/criteria", requireRole("admin"), async (req: Request, res: Response, next: NextFunction) => {
+  app.post("/api/criteria", requireRole("admin", "cluster_leader"), async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const user = req.user as any;
       const { criteria, details } = req.body;
+      
+      // Cluster leaders can only create criteria for their cluster
+      if (user.role === "cluster_leader") {
+        if (!user.clusterId) {
+          return res.status(403).json({ message: "Bạn chưa được gán vào cụm thi đua nào" });
+        }
+        if (criteria.clusterId && criteria.clusterId !== user.clusterId) {
+          return res.status(403).json({ message: "Bạn chỉ có thể tạo tiêu chí cho cụm của mình" });
+        }
+        // Force clusterId to user's cluster
+        criteria.clusterId = user.clusterId;
+      }
       
       // Validate criteria_type
       // 0 = parent node (not scorable), 1-4 = leaf nodes (scorable)
@@ -103,11 +116,33 @@ export function setupCriteriaTreeRoutes(app: Express) {
   
   /**
    * PUT /api/criteria/:id
-   * Cập nhật tiêu chí (admin only)
+   * Cập nhật tiêu chí (admin và cluster_leader)
    */
-  app.put("/api/criteria/:id", requireRole("admin"), async (req: Request, res: Response, next: NextFunction) => {
+  app.put("/api/criteria/:id", requireRole("admin", "cluster_leader"), async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const user = req.user as any;
       const { criteria, details } = req.body;
+      
+      // Cluster leaders can only update criteria for their cluster
+      if (user.role === "cluster_leader") {
+        if (!user.clusterId) {
+          return res.status(403).json({ message: "Bạn chưa được gán vào cụm thi đua nào" });
+        }
+        
+        // Check existing criteria belongs to user's cluster
+        const existing = await criteriaTreeStorage.getCriteriaById(req.params.id);
+        if (!existing) {
+          return res.status(404).json({ message: "Không tìm thấy tiêu chí" });
+        }
+        if (existing.clusterId !== user.clusterId) {
+          return res.status(403).json({ message: "Bạn chỉ có thể sửa tiêu chí của cụm mình" });
+        }
+        
+        // Force clusterId to user's cluster
+        if (criteria.clusterId) {
+          criteria.clusterId = user.clusterId;
+        }
+      }
       
       const updated = await criteriaTreeStorage.updateCriteria(req.params.id, criteria, details);
       if (!updated) {
@@ -122,10 +157,28 @@ export function setupCriteriaTreeRoutes(app: Express) {
   
   /**
    * DELETE /api/criteria/:id
-   * Xóa tiêu chí (admin only, chỉ nếu không có con)
+   * Xóa tiêu chí (admin và cluster_leader, chỉ nếu không có con)
    */
-  app.delete("/api/criteria/:id", requireRole("admin"), async (req: Request, res: Response, next: NextFunction) => {
+  app.delete("/api/criteria/:id", requireRole("admin", "cluster_leader"), async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const user = req.user as any;
+      
+      // Cluster leaders can only delete criteria for their cluster
+      if (user.role === "cluster_leader") {
+        if (!user.clusterId) {
+          return res.status(403).json({ message: "Bạn chưa được gán vào cụm thi đua nào" });
+        }
+        
+        // Check existing criteria belongs to user's cluster
+        const existing = await criteriaTreeStorage.getCriteriaById(req.params.id);
+        if (!existing) {
+          return res.status(404).json({ message: "Không tìm thấy tiêu chí" });
+        }
+        if (existing.clusterId !== user.clusterId) {
+          return res.status(403).json({ message: "Bạn chỉ có thể xóa tiêu chí của cụm mình" });
+        }
+      }
+      
       await criteriaTreeStorage.deleteCriteria(req.params.id);
       res.json({ message: "Đã xóa tiêu chí thành công" });
     } catch (error: any) {

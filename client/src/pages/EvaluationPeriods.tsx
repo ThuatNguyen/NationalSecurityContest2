@@ -1730,7 +1730,7 @@ export default function EvaluationPeriods() {
                                     </span>
                                   ) : canReview1 && user.role === "cluster_leader" && 
                                        summary.evaluation?.status !== "draft" &&
-                                       item.selfScore != null && !isNaN(Number(item.selfScore)) ? (
+                                       (item.selfScore !== null && item.selfScore !== undefined) ? (
                                     // Review permission: Show score if exists, otherwise show button
                                     item.review1Score != null && !isNaN(Number(item.review1Score)) ? (
                                       // Already reviewed - show score as clickable text (can re-review)
@@ -1817,7 +1817,7 @@ export default function EvaluationPeriods() {
                                     </span>
                                   ) : canReview2 && user.role === "admin" && 
                                        summary.evaluation?.status !== "draft" &&
-                                       item.selfScore != null && !isNaN(Number(item.selfScore)) ? (
+                                       (item.selfScore !== null && item.selfScore !== undefined) ? (
                                     // Review permission: Show score if exists, otherwise show button
                                     item.review2Score != null && !isNaN(Number(item.review2Score)) ? (
                                       // Already reviewed - show score as clickable text (can re-review)

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useSession } from "@/lib/useSession";
 import { Plus, Save, X } from "lucide-react";
 import {
   Dialog,
@@ -28,6 +29,7 @@ import type { CriteriaWithChildren, InsertCriteria } from "@shared/schema";
 
 export default function CriteriaManagementPage() {
   const { toast } = useToast();
+  const { user } = useSession();
   
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
   const [selectedClusterId, setSelectedClusterId] = useState<string>("");
@@ -68,14 +70,18 @@ export default function CriteriaManagementPage() {
     }
   }, [periods, selectedPeriodId]);
   
-  // Reset cluster and auto-select first cluster when period changes or clusters load
+  // Auto-select cluster for cluster_leader, or first cluster for admin
   useEffect(() => {
-    if (clusters.length > 0) {
+    if (user?.role === "cluster_leader" && user.clusterId) {
+      // Cluster leader: auto-select and lock to their cluster
+      setSelectedClusterId(user.clusterId);
+    } else if (clusters.length > 0 && user?.role !== "cluster_leader") {
+      // Admin: auto-select first cluster
       setSelectedClusterId(clusters[0].id);
-    } else {
+    } else if (user?.role !== "cluster_leader") {
       setSelectedClusterId("");
     }
-  }, [selectedPeriodId, clusters]);
+  }, [selectedPeriodId, clusters, user]);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -298,18 +304,27 @@ export default function CriteriaManagementPage() {
             
             <div className="w-64">
               <Label>Cụm thi đua</Label>
-              <Select value={selectedClusterId} onValueChange={setSelectedClusterId} data-testid="select-cluster">
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn cụm..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {clusters.map((cluster: any) => (
-                    <SelectItem key={cluster.id} value={cluster.id}>
-                      {cluster.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {user?.role === "cluster_leader" ? (
+                <div
+                  className="h-10 px-3 py-2 border rounded-md bg-muted text-sm"
+                  data-testid="text-cluster"
+                >
+                  {clusters?.find((c: any) => c.id === selectedClusterId)?.name || "Chưa có cụm"}
+                </div>
+              ) : (
+                <Select value={selectedClusterId} onValueChange={setSelectedClusterId} data-testid="select-cluster">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn cụm..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clusters.map((cluster: any) => (
+                      <SelectItem key={cluster.id} value={cluster.id}>
+                        {cluster.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
           
