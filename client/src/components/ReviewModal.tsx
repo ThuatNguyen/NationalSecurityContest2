@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, X, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,6 @@ interface ReviewModalProps {
   selfScore?: number;
   currentReviewScore?: number;
   currentComment?: string;
-  currentFile?: string;
   reviewType: "review1" | "review2";
   onSave: (score: number, comment: string, file: File | null) => void;
 }
@@ -29,47 +28,20 @@ export default function ReviewModal({
   selfScore,
   currentReviewScore,
   currentComment,
-  currentFile,
   reviewType,
   onSave,
 }: ReviewModalProps) {
   const [score, setScore] = useState(currentReviewScore?.toString() || "");
   const [comment, setComment] = useState(currentComment || "");
-  const [file, setFile] = useState<File | null>(null);
-  const [fileName, setFileName] = useState(currentFile || "");
-  const [errors, setErrors] = useState<{ score?: string; file?: string }>({});
+  const [errors, setErrors] = useState<{ score?: string }>({});
 
   useEffect(() => {
     if (open) {
       setScore(currentReviewScore?.toString() || "");
       setComment(currentComment || "");
-      setFileName(currentFile || "");
-      setFile(null);
       setErrors({});
     }
-  }, [open, currentReviewScore, currentComment, currentFile]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      
-      // Validate file size (max 10MB)
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, file: "Kích thước file không được vượt quá 10MB" }));
-        return;
-      }
-      
-      setFile(selectedFile);
-      setFileName(selectedFile.name);
-      setErrors(prev => ({ ...prev, file: undefined }));
-    }
-  };
-
-  const handleRemoveFile = () => {
-    setFile(null);
-    setFileName("");
-    setErrors(prev => ({ ...prev, file: undefined }));
-  };
+  }, [open, currentReviewScore, currentComment]);
 
   const handleScoreChange = (value: string) => {
     setScore(value);
@@ -96,7 +68,7 @@ export default function ReviewModal({
       return;
     }
     
-    onSave(numScore, comment, file);
+    onSave(numScore, comment, null);
     onClose();
   };
 
@@ -182,72 +154,6 @@ export default function ReviewModal({
             />
             <p className="text-xs text-muted-foreground">
               {comment.length} ký tự
-            </p>
-          </div>
-
-          {/* File Upload */}
-          <div className="space-y-2">
-            <Label htmlFor="file-upload-review" className="text-sm font-medium">
-              File đính kèm
-            </Label>
-            <div className="flex flex-col gap-2">
-              {fileName ? (
-                <div className="flex items-center gap-3 p-3 border rounded-md bg-accent/30 hover-elevate">
-                  <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary/10">
-                    <FileText className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" data-testid="text-review-filename">
-                      {fileName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {file ? `${(file.size / 1024).toFixed(1)} KB` : "Đã tải lên trước đó"}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleRemoveFile}
-                    data-testid="button-remove-review-file"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              ) : (
-                <label
-                  htmlFor="file-upload-review"
-                  className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed rounded-md cursor-pointer hover-elevate transition-colors"
-                  data-testid="label-review-upload"
-                >
-                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-muted">
-                    <Upload className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-medium">Tải lên văn bản thẩm định</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Kéo thả hoặc nhấp để chọn file
-                    </p>
-                  </div>
-                </label>
-              )}
-              <input
-                id="file-upload-review"
-                type="file"
-                className="hidden"
-                onChange={handleFileChange}
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                data-testid="input-review-file-upload"
-              />
-            </div>
-            {errors.file && (
-              <Alert variant="destructive" className="py-2">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs">{errors.file}</AlertDescription>
-              </Alert>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Định dạng: PDF, Word (.doc, .docx), Hình ảnh (.jpg, .png) - Tối đa 10MB
             </p>
           </div>
         </div>

@@ -1967,11 +1967,6 @@ export default function EvaluationPeriods() {
                     ? selectedCriteria.review1Comment
                     : selectedCriteria.review2Comment
                 }
-                currentFile={
-                  reviewType === "review1"
-                    ? selectedCriteria.review1File
-                    : selectedCriteria.review2File
-                }
                 reviewType={reviewType}
                 onSave={handleSaveReview}
               />
