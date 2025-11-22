@@ -1,11 +1,14 @@
 import DashboardStats from "@/components/DashboardStats";
-import FilterPanel from "@/components/FilterPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, CheckCircle, TrendingUp, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useSession } from "@/lib/useSession";
+import { useState, useEffect } from "react";
 
 interface DashboardProps {
   role: "admin" | "cluster_leader" | "user";
@@ -23,9 +26,34 @@ interface Evaluation {
   status: string;
 }
 
+interface Cluster {
+  id: string;
+  name: string;
+  shortName: string;
+}
+
 export default function Dashboard({ role }: DashboardProps) {
   const [, setLocation] = useLocation();
+  const { user } = useSession();
+  const [selectedClusterId, setSelectedClusterId] = useState<string>("ALL");
   
+  // Fetch clusters
+  const { data: clusters = [] } = useQuery<Cluster[]>({
+    queryKey: ["/api/clusters"],
+    queryFn: async () => {
+      const res = await fetch("/api/clusters", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch clusters");
+      return res.json();
+    },
+  });
+
+  // Auto-select cluster based on role
+  useEffect(() => {
+    if (user?.role === "cluster_leader" && user.clusterId && selectedClusterId === "ALL") {
+      setSelectedClusterId(user.clusterId);
+    }
+  }, [user, selectedClusterId]);
+
   // Fetch all units in the system
   const { data: units = [] } = useQuery<Unit[]>({
     queryKey: ["/api/units"],
@@ -46,8 +74,20 @@ export default function Dashboard({ role }: DashboardProps) {
     },
   });
 
-  const totalUnits = units.length;
-  const submittedCount = evaluations.filter(e => 
+  // Filter units and evaluations by selected cluster
+  const filteredUnits = selectedClusterId === "ALL" 
+    ? units 
+    : units.filter(u => u.clusterId === selectedClusterId);
+
+  const filteredEvaluations = selectedClusterId === "ALL"
+    ? evaluations
+    : evaluations.filter(e => {
+        const unit = units.find(u => u.id === e.unitId);
+        return unit && unit.clusterId === selectedClusterId;
+      });
+
+  const totalUnits = filteredUnits.length;
+  const submittedCount = filteredEvaluations.filter(e => 
     e.status === "submitted" || 
     e.status === "review1_completed" || 
     e.status === "review2_completed" ||
@@ -103,7 +143,38 @@ export default function Dashboard({ role }: DashboardProps) {
         <p className="text-muted-foreground mt-1">Kỳ thi đua năm 2025</p>
       </div>
 
-      <FilterPanel role={role} />
+      {/* Cluster Filter */}
+      <div className="p-4 bg-card border rounded-md">
+        <div className="flex-1 min-w-[250px] max-w-sm">
+          <Label htmlFor="filter-cluster" className="text-xs font-semibold uppercase tracking-wide mb-2 block">
+            Cụm thi đua
+          </Label>
+          {user?.role === "admin" ? (
+            <Select 
+              value={selectedClusterId} 
+              onValueChange={setSelectedClusterId}
+            >
+              <SelectTrigger id="filter-cluster" data-testid="select-cluster">
+                <SelectValue placeholder="Chọn cụm thi đua" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả đơn vị</SelectItem>
+                {clusters.map((cluster) => (
+                  <SelectItem key={cluster.id} value={cluster.id}>
+                    {cluster.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="h-10 px-3 py-2 bg-muted rounded-md flex items-center text-sm" data-testid="text-cluster">
+              <span className="text-muted-foreground">
+                {clusters.find(c => c.id === selectedClusterId)?.name || "Cụm của bạn"}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
 
       <DashboardStats stats={stats} />
 

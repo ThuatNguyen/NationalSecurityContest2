@@ -327,6 +327,21 @@ export default function UsersManagement() {
     }
   }, [isClusterLeader, isCreating, forcedClusterId, formData.role]);
 
+  // Auto-fill fullName based on role, cluster, or unit
+  useEffect(() => {
+    if (!selectedUser) { // Only for creating new user
+      if (formData.role === "admin") {
+        setFormData(prev => ({ ...prev, fullName: "Quản trị viên hệ thống" }));
+      } else if (formData.role === "cluster_leader" && formData.clusterId) {
+        const clusterName = clusters.find(c => c.id === formData.clusterId)?.name || "";
+        setFormData(prev => ({ ...prev, fullName: clusterName }));
+      } else if (formData.role === "user" && formData.unitId) {
+        const unitName = allUnits.find(u => u.id === formData.unitId)?.name || "";
+        setFormData(prev => ({ ...prev, fullName: unitName }));
+      }
+    }
+  }, [formData.role, formData.clusterId, formData.unitId, clusters, allUnits, selectedUser]);
+
   // Role options: cluster_leader creating can only choose "user"
   const roleOptions = useMemo(() => {
     if (isClusterLeader && isCreating) {
@@ -460,16 +475,6 @@ export default function UsersManagement() {
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                 required
                 data-testid="input-username"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Họ và tên *</Label>
-              <Input
-                id="fullName"
-                value={formData.fullName}
-                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                required
-                data-testid="input-fullname"
               />
             </div>
             <div className="space-y-2">
