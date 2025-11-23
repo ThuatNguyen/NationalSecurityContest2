@@ -30,6 +30,8 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    target: 'es2020',
+    minify: 'esbuild',
   },
   server: {
     host: "0.0.0.0",
