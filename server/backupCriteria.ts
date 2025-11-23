@@ -89,6 +89,7 @@ async function backupCriteria() {
     // 6. Tạo script restore tương ứng
     const restoreScript = `import { db } from "./db";
 import * as schema from "@shared/schema";
+import { eq } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
 
