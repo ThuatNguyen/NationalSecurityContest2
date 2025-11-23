@@ -11,7 +11,9 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:seed": "cross-env NODE_ENV=development tsx server/seed.ts",
-    "db:seed:criteria": "NODE_ENV=development tsx server/seedCriteriaTree.ts"
+    "db:seed:criteria": "NODE_ENV=development tsx server/seedCriteriaTree.ts",
+    "db:seed:quangtri": "cross-env NODE_ENV=development tsx server/seedQuangTri.ts",
+    "db:backup:criteria": "cross-env NODE_ENV=development tsx server/backupCriteria.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
