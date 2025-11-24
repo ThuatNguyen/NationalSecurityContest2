@@ -817,12 +817,8 @@ export class DatabaseStorage implements IStorage {
     const targetsMap = new Map(criteriaTargets.map(t => [t.criteriaId, t]));
     
     // Old scores table removed - all data now in criteriaResults
-    let scoresMap = new Map<string, any>();
-    if (evaluation?.id) {
-      console.log(`[STORAGE] Note: Old scores table has been removed, using criteriaResults only`);
-      // Keep empty map for backwards compatibility with code below
-      });
-    }
+    const scoresMap = new Map<string, any>();
+    // Keep empty map for backwards compatibility with code below
 
     // Transform tree into flat groups by level 1 nodes
     const flattenTree = (node: any, parentPath: string = '', parentNodeId: string | null = null): any[] => {
