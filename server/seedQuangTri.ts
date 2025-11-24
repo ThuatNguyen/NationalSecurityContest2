@@ -301,8 +301,31 @@ async function seedQuangTri() {
     // 6. Tạo tài khoản user cho tất cả các đơn vị
     console.log("Tạo tài khoản cho các đơn vị...");
     
+    // Helper function để chuyển tên có dấu sang không dấu
+    const removeVietnameseTones = (str: string) => {
+      return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D');
+    };
+    
     for (const unit of units) {
-      const username = unit.shortName.toLowerCase().replace(/\s+/g, '');
+      // Lấy tên từ shortName, bỏ dấu, viết thường, viết liền
+      const namePart = removeVietnameseTones(unit.shortName)
+        .toLowerCase()
+        .replace(/\s+/g, '');
+      
+      // Tạo username với prefix dựa vào loại đơn vị
+      let username: string;
+      if (unit.shortName.startsWith('P')) {
+        // Phòng: giữ nguyên mã như PA01, PC03...
+        username = unit.shortName.toLowerCase();
+      } else {
+        // Xã/Phường: thêm prefix cax_
+        username = `cax_${namePart}`;
+      }
+      
       await db.insert(schema.users).values({
         username: username,
         password: hashedPassword,
