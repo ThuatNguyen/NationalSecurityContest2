@@ -269,20 +269,8 @@ async function seed() {
 
     console.log(`✓ Đã tạo ${evaluations.length} đánh giá`);
 
-    // Create empty scores for each evaluation and criteria
-    console.log("Tạo bảng điểm rỗng...");
-    const scores = [];
-    for (const evaluation of evaluations) {
-      for (const criterion of criteria) {
-        scores.push({
-          evaluationId: evaluation.id,
-          criteriaId: criterion.id,
-        });
-      }
-    }
-    await db.insert(schema.scores).values(scores);
-
-    console.log(`✓ Đã tạo ${scores.length} bản ghi điểm`);
+    // Legacy scores table removed - now using criteriaResults
+    console.log("Ghi chú: Bảng scores cũ đã bị xóa, sử dụng criteriaResults");
 
     console.log("\n✅ Hoàn thành seed dữ liệu!");
     console.log("\n📋 Thông tin đăng nhập:");

@@ -9,7 +9,6 @@ import type {
   // Criteria, InsertCriteria, // OLD - removed with tree refactor
   EvaluationPeriod, InsertEvaluationPeriod,
   Evaluation, InsertEvaluation,
-  Score, InsertScore,
   CriteriaResult, InsertCriteriaResult
 } from "@shared/schema";
 
@@ -74,12 +73,6 @@ export interface IStorage {
   getEvaluationByPeriodUnit(periodId: string, unitId: string): Promise<Evaluation | undefined>;
   createEvaluation(evaluation: InsertEvaluation): Promise<Evaluation>;
   updateEvaluation(id: string, evaluation: Partial<InsertEvaluation>): Promise<Evaluation | undefined>;
-  
-  // Scores (Legacy)
-  getScores(evaluationId: string): Promise<Score[]>;
-  getScore(id: string): Promise<Score | undefined>;
-  createScore(score: InsertScore): Promise<Score>;
-  updateScore(id: string, score: Partial<InsertScore>): Promise<Score | undefined>;
   
   // Recalculation (transactional)
   recalculateEvaluationScoresTx(evaluationId: string): Promise<{ scoresUpdated: number }>;
@@ -606,26 +599,6 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  // Scores
-  async getScores(evaluationId: string): Promise<Score[]> {
-    return await db.select().from(schema.scores).where(eq(schema.scores.evaluationId, evaluationId));
-  }
-
-  async getScore(id: string): Promise<Score | undefined> {
-    const result = await db.select().from(schema.scores).where(eq(schema.scores.id, id)).limit(1);
-    return result[0];
-  }
-
-  async createScore(score: InsertScore): Promise<Score> {
-    const result = await db.insert(schema.scores).values(score).returning();
-    return result[0];
-  }
-
-  async updateScore(id: string, score: Partial<InsertScore>): Promise<Score | undefined> {
-    const result = await db.update(schema.scores).set(score).where(eq(schema.scores.id, id)).returning();
-    return result[0];
-  }
-
   // OLD EVALUATION SUMMARY IMPLEMENTATION - DISABLED
   // This method uses the old flat criteria_groups table structure
   /*
@@ -843,16 +816,11 @@ export class DatabaseStorage implements IStorage {
       );
     const targetsMap = new Map(criteriaTargets.map(t => [t.criteriaId, t]));
     
-    // ALSO get scores from old table for review comments/files (backwards compatibility)
+    // Old scores table removed - all data now in criteriaResults
     let scoresMap = new Map<string, any>();
     if (evaluation?.id) {
-      const scores = await this.getScores(evaluation.id);
-      scoresMap = new Map(scores.map(s => [s.criteriaId, s]));
-      console.log(`[STORAGE] Loaded ${scores.length} old scores for evaluation ${evaluation.id}`);
-      scores.forEach(s => {
-        if (s.review1Score || s.review2Score) {
-          console.log(`[STORAGE] Old scores - criteriaId: ${s.criteriaId}, review1: ${s.review1Score}, review2: ${s.review2Score}`);
-        }
+      console.log(`[STORAGE] Note: Old scores table has been removed, using criteriaResults only`);
+      // Keep empty map for backwards compatibility with code below
       });
     }
 
