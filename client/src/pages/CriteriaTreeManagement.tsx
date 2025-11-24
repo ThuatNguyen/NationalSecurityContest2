@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { CriteriaTreeView } from "@/components/CriteriaTreeView";
+import { CopyCriteriaDialog } from "@/components/CopyCriteriaDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/lib/useSession";
-import { Plus, Save, X } from "lucide-react";
+import { Plus, Save, X, Copy } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,7 @@ export default function CriteriaManagementPage() {
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
   const [selectedClusterId, setSelectedClusterId] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false);
   const [editingCriteria, setEditingCriteria] = useState<CriteriaWithChildren | null>(null);
   const [parentCriteria, setParentCriteria] = useState<CriteriaWithChildren | null>(null);
   
@@ -277,10 +279,18 @@ export default function CriteriaManagementPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Quản lý Tiêu chí thi đua (Tree Structure)</CardTitle>
-            <Button onClick={() => openCreateDialog()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Thêm tiêu chí gốc
-            </Button>
+            <div className="flex gap-2">
+              {user?.role === "admin" && (
+                <Button variant="outline" onClick={() => setIsCopyDialogOpen(true)}>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy tiêu chí
+                </Button>
+              )}
+              <Button onClick={() => openCreateDialog()}>
+                <Plus className="w-4 h-4 mr-2" />
+                Thêm tiêu chí gốc
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -546,6 +556,12 @@ export default function CriteriaManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Copy Criteria Dialog */}
+      <CopyCriteriaDialog 
+        open={isCopyDialogOpen} 
+        onOpenChange={setIsCopyDialogOpen} 
+      />
     </div>
   );
 }

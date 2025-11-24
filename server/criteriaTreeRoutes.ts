@@ -452,4 +452,132 @@ export function setupCriteriaTreeRoutes(app: Express) {
       next(error);
     }
   });
+
+  /**
+   * POST /api/criteria/copy
+   * Copy tiêu chí từ cụm nguồn sang nhiều cụm đích
+   */
+  app.post("/api/criteria/copy", requireRole("admin"), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { sourcePeriodId, sourceClusterId, targetPeriodId, targetClusterIds } = req.body;
+
+      // Validation
+      if (!sourcePeriodId || !sourceClusterId || !targetPeriodId || !Array.isArray(targetClusterIds) || targetClusterIds.length === 0) {
+        return res.status(400).json({ 
+          message: "Thiếu thông tin: sourcePeriodId, sourceClusterId, targetPeriodId, targetClusterIds" 
+        });
+      }
+
+      // Kiểm tra không được copy sang chính nó
+      if (sourcePeriodId === targetPeriodId && targetClusterIds.includes(sourceClusterId)) {
+        return res.status(400).json({ 
+          message: "Không thể copy sang chính cụm nguồn" 
+        });
+      }
+
+      // 1. Lấy tất cả criteria của cụm nguồn
+      const sourceCriteria = await db
+        .select()
+        .from(schema.criteria)
+        .where(
+          and(
+            eq(schema.criteria.periodId, sourcePeriodId),
+            eq(schema.criteria.clusterId, sourceClusterId)
+          )
+        )
+        .orderBy(schema.criteria.level, schema.criteria.orderIndex);
+
+      if (sourceCriteria.length === 0) {
+        return res.status(404).json({ 
+          message: "Không tìm thấy tiêu chí nào ở cụm nguồn" 
+        });
+      }
+
+      // 2. Lấy tất cả formula của cụm nguồn
+      const criteriaIds = sourceCriteria.map(c => c.id);
+      const sourceFormulas = [];
+      for (const criteriaId of criteriaIds) {
+        const formulas = await db
+          .select()
+          .from(schema.criteriaFormula)
+          .where(eq(schema.criteriaFormula.criteriaId, criteriaId));
+        sourceFormulas.push(...formulas);
+      }
+
+      const results = [];
+
+      // 3. Copy sang từng cụm đích
+      for (const targetClusterId of targetClusterIds) {
+        try {
+          // Map oldId -> newId
+          const criteriaIdMap = new Map<string, string>();
+
+          // Insert criteria theo thứ tự level
+          for (const oldCriteria of sourceCriteria) {
+            const newParentId = oldCriteria.parentId 
+              ? criteriaIdMap.get(oldCriteria.parentId) 
+              : null;
+
+            const [newCriteria] = await db.insert(schema.criteria).values({
+              parentId: newParentId,
+              level: oldCriteria.level,
+              name: oldCriteria.name,
+              code: oldCriteria.code,
+              description: oldCriteria.description,
+              maxScore: oldCriteria.maxScore,
+              criteriaType: oldCriteria.criteriaType,
+              formulaType: oldCriteria.formulaType,
+              orderIndex: oldCriteria.orderIndex,
+              periodId: targetPeriodId,
+              clusterId: targetClusterId,
+              isActive: oldCriteria.isActive,
+            }).returning();
+
+            criteriaIdMap.set(oldCriteria.id, newCriteria.id);
+          }
+
+          // Insert formulas
+          let formulaCount = 0;
+          for (const oldFormula of sourceFormulas) {
+            const newCriteriaId = criteriaIdMap.get(oldFormula.criteriaId);
+            if (newCriteriaId) {
+              await db.insert(schema.criteriaFormula).values({
+                criteriaId: newCriteriaId,
+                targetRequired: oldFormula.targetRequired,
+                defaultTarget: oldFormula.defaultTarget,
+                unit: oldFormula.unit,
+              });
+              formulaCount++;
+            }
+          }
+
+          results.push({
+            clusterId: targetClusterId,
+            success: true,
+            criteriaCount: criteriaIdMap.size,
+            formulaCount: formulaCount,
+          });
+
+        } catch (error: any) {
+          console.error(`Error copying to cluster ${targetClusterId}:`, error);
+          results.push({
+            clusterId: targetClusterId,
+            success: false,
+            error: error.message,
+          });
+        }
+      }
+
+      res.json({
+        message: "Copy tiêu chí hoàn tất",
+        sourceCriteriaCount: sourceCriteria.length,
+        sourceFormulaCount: sourceFormulas.length,
+        results: results,
+      });
+
+    } catch (error: any) {
+      console.error("Error copying criteria:", error);
+      next(error);
+    }
+  });
 }
