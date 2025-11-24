@@ -161,6 +161,8 @@ export const criteriaResults = pgTable("criteria_results", {
   evidenceFile: text("evidence_file"), // Đường dẫn file server (không hiển thị cho user)
   evidenceFileName: text("evidence_file_name"), // Tên file gốc (hiển thị cho user)
   
+  isAssigned: boolean("is_assigned").notNull().default(true), // Tiêu chí có được giao cho đơn vị này không?
+  
   status: text("status").notNull().default("draft"), // draft, submitted, reviewed, finalized
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -201,6 +203,8 @@ export const insertCriteriaResultSchema = createInsertSchema(criteriaResults).om
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  isAssigned: z.boolean().optional().default(true), // Allow optional with default
 });
 
 // Types

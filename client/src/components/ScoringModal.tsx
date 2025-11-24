@@ -25,6 +25,7 @@ interface ScoringModalProps {
     targetValue?: number;
     actualValue?: number;
     achieved?: boolean;
+    isAssigned?: boolean; // Tiêu chí có được giao cho đơn vị không?
   }) => void;
 }
 
@@ -45,6 +46,9 @@ export default function ScoringModal({
   const [fileName, setFileName] = useState(currentFile || "");
   const [errors, setErrors] = useState<{ [key: string]: string | undefined }>({});
 
+  // Common: Tiêu chí có được giao cho đơn vị không? (inverted: true = NOT assigned)
+  const [notAssigned, setNotAssigned] = useState(false);
+
   // Type 1 (Định lượng) states
   const [targetValue, setTargetValue] = useState(currentTargetValue?.toString() || "");
   const [actualValue, setActualValue] = useState(currentActualValue?.toString() || "");
@@ -62,6 +66,7 @@ export default function ScoringModal({
       setFile(null);
       setFileName(currentFile || "");
       setErrors({});
+      setNotAssigned(false); // Default to assigned (not-assigned = false)
       
       // Reset based on criteria type
       if (criteriaType === 1) {
@@ -147,7 +152,15 @@ export default function ScoringModal({
 
     // Validate based on criteria type
     if (criteriaType === 1) {
-      // Định lượng: Validate target and actual
+      // Định lượng: Skip validation if not assigned
+      if (notAssigned) {
+        onSave({
+          isAssigned: false,
+        });
+        onClose();
+        return;
+      }
+      
       const actual = parseFloat(actualValue);
       
       // Validate actual value (always required)
@@ -175,17 +188,36 @@ export default function ScoringModal({
         targetValue: targetToSave,
         actualValue: actual,
         file: file || undefined,
+        isAssigned: true,
       });
     } else if (criteriaType === 2) {
-      // Định tính: No validation needed, just pass achieved status
+      // Định tính: If not assigned, skip scoring
+      if (notAssigned) {
+        onSave({
+          isAssigned: false,
+        });
+        onClose();
+        return;
+      }
+      
+      // Normal scoring
       const isAchieved = achieved === "true";
       onSave({
         achieved: isAchieved,
         score: isAchieved ? maxScore : 0,
         file: file || undefined,
+        isAssigned: true,
       });
     } else if (criteriaType === 3) {
-      // Nhập thẳng: Validate score <= maxScore
+      // Nhập thẳng: Skip validation if not assigned
+      if (notAssigned) {
+        onSave({
+          isAssigned: false,
+        });
+        onClose();
+        return;
+      }
+      
       const numScore = parseFloat(score);
       
       if (!score || isNaN(numScore)) {
@@ -202,9 +234,18 @@ export default function ScoringModal({
       onSave({
         score: numScore,
         file: file || undefined,
+        isAssigned: true,
       });
     } else if (criteriaType === 4) {
-      // Cộng/trừ: Allow negative scores
+      // Cộng/trừ: Skip validation if not assigned
+      if (notAssigned) {
+        onSave({
+          isAssigned: false,
+        });
+        onClose();
+        return;
+      }
+      
       const numScore = parseFloat(score);
       
       if (!score || isNaN(numScore)) {
@@ -219,6 +260,7 @@ export default function ScoringModal({
       onSave({
         score: numScore,
         file: file || undefined,
+        isAssigned: true,
       });
     }
     
@@ -388,7 +430,23 @@ export default function ScoringModal({
                 Tiêu chí định tính
               </h4>
               
-              <div className="space-y-3">
+              {/* Checkbox: Không giao chỉ tiêu */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="not-assigned-type2"
+                  checked={notAssigned}
+                  onCheckedChange={(checked) => setNotAssigned(checked as boolean)}
+                  data-testid="checkbox-not-assigned"
+                />
+                <Label
+                  htmlFor="not-assigned-type2"
+                  className="text-sm font-medium leading-none cursor-pointer"
+                >
+                  Tiêu chí không được giao chỉ tiêu
+                </Label>
+              </div>
+              
+              {!notAssigned && (<div className="space-y-3">
                 <Label className="text-sm font-medium">
                   Kết quả đánh giá <span className="text-destructive">*</span>
                 </Label>
@@ -416,7 +474,7 @@ export default function ScoringModal({
                     </Label>
                   </div>
                 </RadioGroup>
-              </div>
+              </div>)}
             </div>
           )}
 
@@ -427,7 +485,23 @@ export default function ScoringModal({
                 Tiêu chí chấm thẳng
               </h4>
               
-              <div className="space-y-2">
+              {/* Checkbox: Không giao chỉ tiêu */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="not-assigned-type3"
+                  checked={notAssigned}
+                  onCheckedChange={(checked) => setNotAssigned(checked as boolean)}
+                  data-testid="checkbox-not-assigned"
+                />
+                <Label
+                  htmlFor="not-assigned-type3"
+                  className="text-sm font-medium leading-none cursor-pointer"
+                >
+                  Tiêu chí không được giao chỉ tiêu
+                </Label>
+              </div>
+              
+              {!notAssigned && (<div className="space-y-2">
                 <Label htmlFor="score" className="text-sm font-medium">
                   Điểm tự chấm <span className="text-destructive">*</span>
                 </Label>
@@ -460,7 +534,7 @@ export default function ScoringModal({
                 <p className="text-xs text-muted-foreground">
                   Nhập điểm từ 0 đến {maxScore}. Có thể dùng số thập phân (VD: 0.5, 1.8)
                 </p>
-              </div>
+              </div>)}
             </div>
           )}
 
@@ -471,7 +545,23 @@ export default function ScoringModal({
                 Tiêu chí cộng/trừ điểm
               </h4>
               
-              <div className="space-y-2">
+              {/* Checkbox: Không giao chỉ tiêu */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="not-assigned-type4"
+                  checked={notAssigned}
+                  onCheckedChange={(checked) => setNotAssigned(checked as boolean)}
+                  data-testid="checkbox-not-assigned"
+                />
+                <Label
+                  htmlFor="not-assigned-type4"
+                  className="text-sm font-medium leading-none cursor-pointer"
+                >
+                  Tiêu chí không được giao chỉ tiêu
+                </Label>
+              </div>
+              
+              {!notAssigned && (<div className="space-y-2">
                 <Label htmlFor="score" className="text-sm font-medium">
                   Điểm cộng/trừ <span className="text-destructive">*</span>
                 </Label>
@@ -497,12 +587,13 @@ export default function ScoringModal({
                 <p className="text-xs text-muted-foreground">
                   Nhập điểm cộng (số dương) hoặc điểm trừ (số âm). VD: 5 hoặc -3
                 </p>
-              </div>
+              </div>)}
             </div>
           )}
 
           {/* File Upload (for all types except Type 1 which has its own section) */}
-          {(criteriaType === 2 || criteriaType === 3 || criteriaType === 4) && (
+          {/* Hide file upload if notAssigned */}
+          {(criteriaType === 2 || criteriaType === 3 || criteriaType === 4) && !notAssigned && (
             <div className="space-y-2">
               <Label htmlFor="file-upload" className="text-sm font-medium">
                 File minh chứng {criteriaType === 2 && <span className="text-muted-foreground">(tùy chọn)</span>}

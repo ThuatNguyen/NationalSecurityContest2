@@ -439,8 +439,10 @@ export class CriteriaTreeStorage {
    */
   async calculateUnitTotalScore(unitId: string, periodId: string): Promise<{
     total: number;
+    totalAssigned: number; // Tổng maxScore của tiêu chí được giao
+    achievementRate: number; // % = total / totalAssigned × 100
     byType: { [key: number]: number };
-    details: Array<{ criteriaId: string; criteriaName: string; score: number }>;
+    details: Array<{ criteriaId: string; criteriaName: string; score: number; isAssigned: boolean }>;
   }> {
     const results = await this.getCriteriaResults(unitId, periodId);
     const allCriteria = await this.getCriteria(periodId);
@@ -453,27 +455,41 @@ export class CriteriaTreeStorage {
     // Filter results to only leaf criteria
     const leafResults = results.filter(r => leafCriteriaIds.includes(r.criteriaId));
     
-    let total = 0;
+    let total = 0; // Tổng điểm đạt được (của tiêu chí được giao)
+    let totalAssigned = 0; // Tổng điểm tối đa được giao
     const byType: { [key: number]: number } = {};
-    const details: Array<{ criteriaId: string; criteriaName: string; score: number }> = [];
+    const details: Array<{ criteriaId: string; criteriaName: string; score: number; isAssigned: boolean }> = [];
     
     for (const result of leafResults) {
-      const score = Number(result.finalScore || result.calculatedScore || 0);
-      total += score;
-      
       const criteria = allCriteria.find(c => c.id === result.criteriaId);
-      if (criteria) {
+      if (!criteria) continue;
+      
+      const isAssigned = result.isAssigned ?? true; // Default to assigned if not set
+      const score = Number(result.finalScore || result.calculatedScore || 0);
+      
+      // CHỈ tính vào tổng nếu tiêu chí được giao
+      if (isAssigned) {
+        total += score;
+        totalAssigned += Number(criteria.maxScore);
         byType[criteria.criteriaType] = (byType[criteria.criteriaType] || 0) + score;
-        details.push({
-          criteriaId: criteria.id,
-          criteriaName: criteria.name,
-          score
-        });
       }
+      
+      details.push({
+        criteriaId: criteria.id,
+        criteriaName: criteria.name,
+        score,
+        isAssigned,
+      });
     }
+    
+    const achievementRate = totalAssigned > 0 
+      ? Number(((total / totalAssigned) * 100).toFixed(2))
+      : 0;
     
     return {
       total: Number(total.toFixed(2)),
+      totalAssigned: Number(totalAssigned.toFixed(2)),
+      achievementRate,
       byType,
       details
     };

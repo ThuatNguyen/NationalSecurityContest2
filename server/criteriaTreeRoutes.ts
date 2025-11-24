@@ -431,6 +431,7 @@ export function setupCriteriaTreeRoutes(app: Express) {
           criteriaId,
           unitId,
           periodId,
+          isAssigned: true, // Default to assigned when created via cluster review
           clusterScore: reviewType === "review1" ? (score !== undefined && score !== null ? score.toString() : null) : null,
           finalScore: reviewType === "review2" ? (score !== undefined && score !== null ? score.toString() : null) : null,
           // Normalize comment: empty string becomes null, undefined/null skipped

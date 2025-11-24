@@ -1935,6 +1935,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         evidenceFile: z.string().nullable().optional(), // Đường dẫn server (không hiển thị)
         evidenceFileName: z.string().nullable().optional(), // Tên file gốc (hiển thị cho user)
         note: z.string().optional(),
+        isAssigned: z.boolean().optional().default(true), // Tiêu chí có được giao cho đơn vị không?
       }).parse(req.body);
 
       // Permission check: Unit ownership
@@ -2032,6 +2033,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         unitId: inputData.unitId,
         periodId: inputData.periodId,
         note: inputData.note,
+        isAssigned: inputData.isAssigned, // Save isAssigned flag
         // Don't set status here - let storage.upsertCriteriaResult handle it
       };
       

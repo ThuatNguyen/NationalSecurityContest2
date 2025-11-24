@@ -851,6 +851,7 @@ export class DatabaseStorage implements IStorage {
         calculatedScore: result?.calculatedScore ? parseFloat(result.calculatedScore) : undefined,
         actualValue: result?.actualValue ? parseFloat(result.actualValue) : undefined,
         targetValue: target?.targetValue !== null && target?.targetValue !== undefined ? parseFloat(target.targetValue) : undefined, // Add target value (handle 0)
+        isAssigned: result?.isAssigned ?? true, // Add isAssigned flag (default true for backwards compatibility)
         evidenceFile: result?.evidenceFile || null,
         evidenceFileName: result?.evidenceFileName || null, // Display name for evidence file
         note: result?.note || null,
@@ -1078,13 +1079,8 @@ export class DatabaseStorage implements IStorage {
           scoresByCriteria[result.criteriaId].clusterScore = result.clusterScore ? parseFloat(result.clusterScore) : null;
           scoresByCriteria[result.criteriaId].hasResult = true; // Có kết quả rồi
           
-          // Check nếu không được giao: actualValue > 0 NHƯNG targetValue = 0 hoặc null
-          const targetKey = `${result.unitId}_${result.criteriaId}`;
-          const targetValue = targetMap.get(targetKey) || 0;
-          const actualValue = result.actualValue ? parseFloat(result.actualValue) : 0;
-          const hasActualButNoTarget = actualValue > 0 && targetValue === 0;
-          
-          scoresByCriteria[result.criteriaId].isAssigned = !hasActualButNoTarget;
+          // Use isAssigned from database (defaults to true if not set)
+          scoresByCriteria[result.criteriaId].isAssigned = result.isAssigned ?? true;
         }
       });
 

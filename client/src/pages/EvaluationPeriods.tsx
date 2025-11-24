@@ -392,6 +392,7 @@ export default function EvaluationPeriods() {
     targetValue?: number;
     actualValue?: number;
     achieved?: boolean;
+    isAssigned?: boolean;
   }) => {
     if (!selectedCriteria || !selectedPeriod || !selectedUnitId) return;
     
@@ -423,6 +424,7 @@ export default function EvaluationPeriods() {
         // Preserve existing evidenceFile/evidenceFileName when no new upload
         evidenceFile: fileUrl || selectedCriteria.evidenceFile || selectedCriteria.selfScoreFile, // Fallback order: new → evidenceFile → legacy
         evidenceFileName: originalFileName || selectedCriteria.evidenceFileName, // Preserve display name
+        isAssigned: data.isAssigned ?? true, // Pass isAssigned flag from modal
       };
 
       if (criteriaType === 1) {
@@ -1002,17 +1004,16 @@ export default function EvaluationPeriods() {
       const maxScore = rootCriteria.maxScore as number || 0;
       totalMax += maxScore;
       
-      // Check ALL leaf criteria in this group for "no target" status
+      // Check ALL leaf criteria in this group for isAssigned = false
       // A leaf criteria is one with criteriaType 1-4 (not 0 which is parent)
       group.criteria.forEach((criteria) => {
         // Only check leaf criteria (criteriaType 1-4)
         if (criteria.criteriaType && criteria.criteriaType >= 1 && criteria.criteriaType <= 4) {
-          const hasTarget = criteria.targetValue !== null && criteria.targetValue !== undefined;
-          const hasActual = criteria.actualValue !== null && criteria.actualValue !== undefined;
-          const isNoTargetButHasResult = hasTarget && criteria.targetValue === 0 && hasActual && Number(criteria.actualValue) > 0;
+          // Use isAssigned field from backend (default true)
+          const isAssigned = (criteria as any).isAssigned !== false;
           
-          // If it's a "no target" case, add to notAssignedTotal
-          if (isNoTargetButHasResult) {
+          // If not assigned, add to notAssignedTotal
+          if (!isAssigned) {
             const criteriaMaxScore = criteria.maxScore as number || 0;
             notAssignedTotal += criteriaMaxScore;
           }
@@ -1135,19 +1136,46 @@ export default function EvaluationPeriods() {
     }
     
     // Type 2: Định tính (Qualitative)
-    if (item.criteriaType === 2 && item.selfScore !== undefined && item.selfScore !== null) {
-      const achieved = Number(item.selfScore) > 0;
+    if (item.criteriaType === 2) {
+      const isAssigned = (item as any).isAssigned !== false;
+      const achieved = item.selfScore !== undefined && item.selfScore !== null && Number(item.selfScore) > 0;
+      
       return (
         <span>
           {baseName}
-          <span className={`text-xs ml-2 ${achieved ? 'text-green-600' : 'text-gray-500'}`}>
-            ({achieved ? 'Đạt' : 'Chưa đạt'})
-          </span>
+          {/* Chỉ hiển thị Đạt/Chưa đạt nếu tiêu chí ĐƯỢC GIAO */}
+          {isAssigned && item.selfScore !== undefined && item.selfScore !== null && (
+            <span className={`text-xs ml-2 ${achieved ? 'text-green-600' : 'text-gray-500'}`}>
+              ({achieved ? 'Đạt' : 'Chưa đạt'})
+            </span>
+          )}
+          {/* Chỉ hiển thị badge "Không giao CT" nếu KHÔNG được giao */}
+          {!isAssigned && (
+            <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+              Không giao CT
+            </span>
+          )}
         </span>
       );
     }
     
-    // Type 3, 4 or no data: Just show name
+    // Type 3, 4: Check isAssigned
+    if (item.criteriaType === 3 || item.criteriaType === 4) {
+      const isAssigned = (item as any).isAssigned !== false;
+      
+      return (
+        <span>
+          {baseName}
+          {!isAssigned && (
+            <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+              Không giao CT
+            </span>
+          )}
+        </span>
+      );
+    }
+    
+    // No data: Just show name
     return <span>{baseName}</span>;
   };
 
@@ -1680,11 +1708,20 @@ export default function EvaluationPeriods() {
                                       }`}
                                       data-testid={`button-selfscore-${item.id}`}
                                     >
-                                      {/* Display only selfScore */}
-                                      {item.selfScore != null &&
-                                      !isNaN(Number(item.selfScore))
-                                        ? Number(item.selfScore).toFixed(2)
-                                        : "Chấm điểm"}
+                                      {/* Display only selfScore, or "-" if not assigned */}
+                                      {(() => {
+                                        const isAssigned = (item as any).isAssigned !== false;
+                                        
+                                        // Nếu KHÔNG được giao → hiển thị "-"
+                                        if (!isAssigned) {
+                                          return "-";
+                                        }
+                                        
+                                        // Nếu ĐƯỢC GIAO → hiển thị điểm hoặc "Chấm điểm"
+                                        return item.selfScore != null && !isNaN(Number(item.selfScore))
+                                          ? Number(item.selfScore).toFixed(2)
+                                          : "Chấm điểm";
+                                      })()}
                                     </Button>
                                   ) : (
                                     // Read-only view for non-draft or non-user roles
