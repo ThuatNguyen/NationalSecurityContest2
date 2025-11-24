@@ -5,18 +5,18 @@ import * as fs from "fs";
 import * as path from "path";
 
 async function backupCriteria() {
-  console.log("🔍 Bắt đầu backup criteria cho cụm 347...");
+  console.log("🔍 Bắt đầu backup criteria cho cụm 346...");
 
   try {
     // 1. Tìm cụm 347
     const cluster = await db
       .select()
       .from(schema.clusters)
-      .where(eq(schema.clusters.shortName, "Cụm 347"))
+      .where(eq(schema.clusters.shortName, "CỤM 346"))
       .limit(1);
 
     if (cluster.length === 0) {
-      console.error("❌ Không tìm thấy cụm 347");
+      console.error("❌ Không tìm thấy cụm 346");
       return;
     }
 
@@ -74,7 +74,7 @@ async function backupCriteria() {
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const filename = `criteria_cum347_${timestamp}.json`;
+    const filename = `criteria_cum346_${timestamp}.json`;
     const filepath = path.join(backupDir, filename);
 
     fs.writeFileSync(filepath, JSON.stringify(backupData, null, 2), "utf-8");
@@ -87,19 +87,23 @@ async function backupCriteria() {
     console.log(`   - Số formula: ${allFormulas.length}`);
 
     // 6. Tạo script restore tương ứng
-    const restoreScript = `import { db } from "./db";
-import * as schema from "@shared/schema";
+    const restoreScript = `import { db } from "../server/db.js";
+import * as schema from "../shared/schema.js";
 import { eq } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function restoreCriteria() {
-  console.log("🔄 Bắt đầu restore criteria cho cụm 347...");
+  console.log("🔄 Bắt đầu restore criteria cho cụm ${cluster[0].shortName}...");
 
   try {
     // Đọc file backup
     const backupFile = "${filename}";
-    const filepath = path.join(process.cwd(), "backups", backupFile);
+    const filepath = path.join(__dirname, backupFile);
     const data = JSON.parse(fs.readFileSync(filepath, "utf-8"));
 
     console.log(\`📁 Đọc file: \${backupFile}\`);
@@ -184,7 +188,7 @@ restoreCriteria()
   });
 `;
 
-    const restoreFilename = `restoreCriteria_cum347_${timestamp}.ts`;
+    const restoreFilename = `restoreCriteria_cum346_${timestamp}.ts`;
     const restoreFilepath = path.join(backupDir, restoreFilename);
     fs.writeFileSync(restoreFilepath, restoreScript, "utf-8");
 
