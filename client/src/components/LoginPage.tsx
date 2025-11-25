@@ -8,10 +8,13 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [isFirstTimeLogin, setIsFirstTimeLogin] = useState(false);
   const { toast } = useToast();
 
   const loginMutation = useMutation({
@@ -20,10 +23,19 @@ export default function LoginPage() {
       return await response.json();
     },
     onSuccess: async (user: any) => {
-      // Update cache with user data
-      queryClient.setQueryData(['/api/auth/me'], user);
+      // Check if user needs to reset password (first time login)
+      if (user.requirePasswordReset) {
+        toast({
+          title: "Yêu cầu đổi mật khẩu",
+          description: user.message || "Vui lòng đặt mật khẩu mới trước khi sử dụng hệ thống",
+        });
+        setIsFirstTimeLogin(true);
+        setShowPasswordModal(true);
+        return;
+      }
       
-      // Invalidate to trigger refetch and re-render App
+      // Normal login flow
+      queryClient.setQueryData(['/api/auth/me'], user);
       await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       
       toast({
@@ -31,7 +43,6 @@ export default function LoginPage() {
         description: `Chào mừng, ${user.fullName}!`,
       });
       
-      // Force reload to ensure clean state (similar to logout)
       window.location.href = '/';
     },
     onError: (error: any) => {
@@ -122,6 +133,13 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Password Reset Modal */}
+      <ChangePasswordModal
+        open={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        isFirstTime={isFirstTimeLogin}
+      />
     </div>
   );
 }

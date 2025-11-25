@@ -34,6 +34,8 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("user"), // admin, cluster_leader, user
   clusterId: varchar("cluster_id").references(() => clusters.id, { onDelete: "set null" }),
   unitId: varchar("unit_id").references(() => units.id, { onDelete: "set null" }),
+  requirePasswordReset: boolean("require_password_reset").notNull().default(false),
+  lastPasswordChange: timestamp("last_password_change"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -58,6 +60,8 @@ export type Unit = typeof units.$inferSelect;
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+  requirePasswordReset: true,
+  lastPasswordChange: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

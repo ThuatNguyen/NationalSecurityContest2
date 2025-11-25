@@ -298,6 +298,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({
         ...userData,
         password: hashedPassword,
+        requirePasswordReset: true, // Force password reset on first login
+        lastPasswordChange: null,
       });
 
       res.json({
@@ -324,6 +326,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       req.login(user, (err) => {
         if (err) return next(err);
+        
+        // Check if user needs to reset password
+        if (user.requirePasswordReset) {
+          return res.json({
+            requirePasswordReset: true,
+            userId: user.id,
+            username: user.username,
+            fullName: user.fullName,
+            message: "Vui lòng đổi mật khẩu trước khi sử dụng hệ thống"
+          });
+        }
+        
         res.json(user);
       });
     })(req, res, next);
@@ -338,6 +352,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/me", requireAuth, (req, res) => {
     res.json(req.user);
+  });
+
+  // Change password API
+  app.post("/api/auth/change-password", requireAuth, async (req, res, next) => {
+    try {
+      const { currentPassword, newPassword } = z.object({
+        currentPassword: z.string().optional(),
+        newPassword: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
+      }).parse(req.body);
+
+      const user = await storage.getUserById(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ message: "Không tìm thấy người dùng" });
+      }
+
+      // If NOT first time (requirePasswordReset=false) → require current password
+      if (!user.requirePasswordReset) {
+        if (!currentPassword) {
+          return res.status(400).json({ message: "Vui lòng nhập mật khẩu hiện tại" });
+        }
+        
+        const isValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isValid) {
+          return res.status(401).json({ message: "Mật khẩu hiện tại không đúng" });
+        }
+      }
+
+      // Hash and update new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await db.update(schema.users)
+        .set({
+          password: hashedPassword,
+          requirePasswordReset: false, // Clear flag
+          lastPasswordChange: new Date(),
+        })
+        .where(eq(schema.users.id, user.id));
+
+      res.json({ message: "Đổi mật khẩu thành công" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dữ liệu không hợp lệ", errors: error.errors });
+      }
+      next(error);
+    }
   });
 
   // User management routes
@@ -2377,20 +2435,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Calculate maxScoreAssigned = totalMaxScore - sum of unassigned criteria maxScores
         let notAssignedTotal = 0;
         
-        // Check each leaf criteria (criteriaType 1-4) for "no target but has result"
+        // Check each leaf criteria (criteriaType 1-4) for isAssigned flag
         const leafCriteria = allCriteria.filter(c => c.criteriaType && c.criteriaType >= 1 && c.criteriaType <= 4);
         leafCriteria.forEach(criteria => {
           const result = unitResults.find(r => r.criteriaId === criteria.id);
-          const target = criteriaTargets.find(t => t.unitId === unit.id && t.criteriaId === criteria.id);
           
-          if (result && result.actualValue) {
-            const actualValue = parseFloat(result.actualValue);
-            const targetValue = target ? parseFloat(target.targetValue) : null;
-            
-            // Check if "no target but has result": targetValue = 0 AND actualValue > 0
-            if (targetValue === 0 && actualValue > 0) {
-              notAssignedTotal += parseFloat(criteria.maxScore);
-            }
+          // If criteria result exists and isAssigned = false → exclude from total
+          if (result && result.isAssigned === false) {
+            notAssignedTotal += parseFloat(criteria.maxScore);
           }
         });
         
@@ -2728,22 +2780,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         );
 
+      // Get all criteria results for this period
+      const unitIds = units.map(u => u.id);
+      const criteriaResults = unitIds.length > 0
+        ? await db.select()
+            .from(schema.criteriaResults)
+            .where(
+              and(
+                eq(schema.criteriaResults.periodId, periodId),
+                inArray(schema.criteriaResults.unitId, unitIds)
+              )
+            )
+        : [];
+
+      // Get all criteria for this period and cluster (to calculate max scores)
+      const allCriteria = await db.select()
+        .from(schema.criteria)
+        .where(
+          and(
+            eq(schema.criteria.periodId, periodId),
+            eq(schema.criteria.clusterId, clusterId)
+          )
+        );
+
+      // Calculate total max score
+      const totalMaxScore = allCriteria
+        .filter(c => !c.parentId || c.parentId === null)
+        .reduce((sum, c) => sum + parseFloat(c.maxScore), 0);
+
       // Build summary data
       const summaryData = units.map(unit => {
         const evaluation = evaluations.find(e => e.unitId === unit.id);
+        const unitResults = criteriaResults.filter(r => r.unitId === unit.id);
+        
+        // Sum scores from criteriaResults
+        const selfScore = unitResults.reduce((sum, r) => 
+          sum + (r.selfScore ? parseFloat(r.selfScore) : 0), 0);
+        const clusterScore = unitResults.reduce((sum, r) => 
+          sum + (r.clusterScore ? parseFloat(r.clusterScore) : 0), 0);
+        
+        // Calculate maxScoreAssigned
+        let notAssignedTotal = 0;
+        const leafCriteria = allCriteria.filter(c => c.criteriaType && c.criteriaType >= 1 && c.criteriaType <= 4);
+        leafCriteria.forEach(criteria => {
+          const result = unitResults.find(r => r.criteriaId === criteria.id);
+          if (result && result.isAssigned === false) {
+            notAssignedTotal += parseFloat(criteria.maxScore);
+          }
+        });
+        const maxScoreAssigned = totalMaxScore - notAssignedTotal;
         
         return {
           unitId: unit.id,
           unitName: unit.name,
-          selfScore: evaluation?.totalSelfScore ? parseFloat(evaluation.totalSelfScore) : 0,
-          clusterScore: evaluation?.totalReview1Score ? parseFloat(evaluation.totalReview1Score) : 0,
+          selfScore,
+          clusterScore,
+          maxScoreAssigned,
           approvedScore: evaluation?.totalFinalScore ? parseFloat(evaluation.totalFinalScore) : 0,
           status: evaluation?.status || "draft",
         };
       });
 
       // Calculate ranking
-      const sortedData = [...summaryData].sort((a, b) => b.approvedScore - a.approvedScore);
+      const sortedData = [...summaryData].sort((a, b) => b.clusterScore - a.clusterScore);
       const rankedData = summaryData.map(item => {
         const rank = sortedData.findIndex(s => s.unitId === item.unitId) + 1;
         return { ...item, ranking: rank };
@@ -2788,8 +2887,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         worksheet.addRow({
           ranking: item.ranking,
           unitName: item.unitName,
-          selfScore: item.selfScore > 0 ? item.selfScore.toFixed(2) : "-",
-          clusterScore: item.clusterScore > 0 ? item.clusterScore.toFixed(2) : "-",
+          selfScore: item.selfScore > 0 && item.maxScoreAssigned != null
+            ? `${item.selfScore.toFixed(1)}/${item.maxScoreAssigned.toFixed(1)}`
+            : item.selfScore > 0 ? item.selfScore.toFixed(1) : "-",
+          clusterScore: item.clusterScore > 0 && item.maxScoreAssigned != null
+            ? `${item.clusterScore.toFixed(1)}/${item.maxScoreAssigned.toFixed(1)}`
+            : item.clusterScore > 0 ? item.clusterScore.toFixed(1) : "-",
           approvedScore: item.approvedScore > 0 ? item.approvedScore.toFixed(2) : "-",
           status: statusMap[item.status] || "Chưa nộp",
         });
