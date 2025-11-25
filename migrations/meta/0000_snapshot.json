@@ -1,5 +1,5 @@
 {
-  "id": "48e95224-2376-4a2e-a387-264b4acbbab3",
+  "id": "532b5e72-c5ec-4aaf-a4bc-a6c737da451b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -21,6 +21,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "short_name": {
+          "name": "short_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cluster_type": {
+          "name": "cluster_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "description": {
           "name": "description",
           "type": "text",
@@ -33,12 +45,34 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "clusters_name_unique": {
+          "name": "clusters_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        },
+        "clusters_short_name_unique": {
+          "name": "clusters_short_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "short_name"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -54,29 +88,82 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "level": {
+          "name": "level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "group_id": {
-          "name": "group_id",
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_score": {
+          "name": "max_score",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "criteria_type": {
+          "name": "criteria_type",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "formula_type": {
+          "name": "formula_type",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "order_index": {
+          "name": "order_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "period_id": {
+          "name": "period_id",
           "type": "varchar",
           "primaryKey": false,
           "notNull": true
         },
-        "max_score": {
-          "name": "max_score",
-          "type": "numeric(5, 2)",
+        "cluster_id": {
+          "name": "cluster_id",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": true
         },
-        "display_order": {
-          "name": "display_order",
+        "is_active": {
+          "name": "is_active",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": 1
         },
         "created_at": {
           "name": "created_at",
@@ -84,16 +171,83 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "criteria_period_cluster_idx": {
+          "name": "criteria_period_cluster_idx",
+          "columns": [
+            {
+              "expression": "period_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "cluster_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "order_index",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "criteria_group_id_criteria_groups_id_fk": {
-          "name": "criteria_group_id_criteria_groups_id_fk",
+        "criteria_parent_id_criteria_id_fk": {
+          "name": "criteria_parent_id_criteria_id_fk",
           "tableFrom": "criteria",
-          "tableTo": "criteria_groups",
+          "tableTo": "criteria",
           "columnsFrom": [
-            "group_id"
+            "parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "criteria_period_id_evaluation_periods_id_fk": {
+          "name": "criteria_period_id_evaluation_periods_id_fk",
+          "tableFrom": "criteria",
+          "tableTo": "evaluation_periods",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "criteria_cluster_id_clusters_id_fk": {
+          "name": "criteria_cluster_id_clusters_id_fk",
+          "tableFrom": "criteria",
+          "tableTo": "clusters",
+          "columnsFrom": [
+            "cluster_id"
           ],
           "columnsTo": [
             "id"
@@ -108,8 +262,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.criteria_groups": {
-      "name": "criteria_groups",
+    "public.criteria_bonus_penalty": {
+      "name": "criteria_bonus_penalty",
       "schema": "",
       "columns": {
         "id": {
@@ -119,21 +273,533 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "name": {
-          "name": "name",
+        "criteria_id": {
+          "name": "criteria_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bonus_point": {
+          "name": "bonus_point",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "penalty_point": {
+          "name": "penalty_point",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "min_score": {
+          "name": "min_score",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_score": {
+          "name": "max_score",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "display_order": {
-          "name": "display_order",
-          "type": "integer",
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "criteria_bonus_penalty_criteria_id_criteria_id_fk": {
+          "name": "criteria_bonus_penalty_criteria_id_criteria_id_fk",
+          "tableFrom": "criteria_bonus_penalty",
+          "tableTo": "criteria",
+          "columnsFrom": [
+            "criteria_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "criteria_bonus_penalty_criteria_id_unique": {
+          "name": "criteria_bonus_penalty_criteria_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "criteria_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.criteria_fixed_score": {
+      "name": "criteria_fixed_score",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "criteria_id": {
+          "name": "criteria_id",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": true
         },
-        "year": {
-          "name": "year",
+        "point_per_unit": {
+          "name": "point_per_unit",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_score_limit": {
+          "name": "max_score_limit",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "criteria_fixed_score_criteria_id_criteria_id_fk": {
+          "name": "criteria_fixed_score_criteria_id_criteria_id_fk",
+          "tableFrom": "criteria_fixed_score",
+          "tableTo": "criteria",
+          "columnsFrom": [
+            "criteria_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "criteria_fixed_score_criteria_id_unique": {
+          "name": "criteria_fixed_score_criteria_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "criteria_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.criteria_formula": {
+      "name": "criteria_formula",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "criteria_id": {
+          "name": "criteria_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_required": {
+          "name": "target_required",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "default_target": {
+          "name": "default_target",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "criteria_formula_criteria_id_criteria_id_fk": {
+          "name": "criteria_formula_criteria_id_criteria_id_fk",
+          "tableFrom": "criteria_formula",
+          "tableTo": "criteria",
+          "columnsFrom": [
+            "criteria_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "criteria_formula_criteria_id_unique": {
+          "name": "criteria_formula_criteria_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "criteria_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.criteria_results": {
+      "name": "criteria_results",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "criteria_id": {
+          "name": "criteria_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_id": {
+          "name": "unit_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actual_value": {
+          "name": "actual_value",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "self_score": {
+          "name": "self_score",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bonus_count": {
+          "name": "bonus_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "penalty_count": {
+          "name": "penalty_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "calculated_score": {
+          "name": "calculated_score",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cluster_score": {
+          "name": "cluster_score",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "final_score": {
+          "name": "final_score",
+          "type": "numeric(7, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_file": {
+          "name": "evidence_file",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_file_name": {
+          "name": "evidence_file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_assigned": {
+          "name": "is_assigned",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "criteria_results_criteria_id_criteria_id_fk": {
+          "name": "criteria_results_criteria_id_criteria_id_fk",
+          "tableFrom": "criteria_results",
+          "tableTo": "criteria",
+          "columnsFrom": [
+            "criteria_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "criteria_results_unit_id_units_id_fk": {
+          "name": "criteria_results_unit_id_units_id_fk",
+          "tableFrom": "criteria_results",
+          "tableTo": "units",
+          "columnsFrom": [
+            "unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "criteria_results_period_id_evaluation_periods_id_fk": {
+          "name": "criteria_results_period_id_evaluation_periods_id_fk",
+          "tableFrom": "criteria_results",
+          "tableTo": "evaluation_periods",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "criteria_results_criteria_id_unit_id_period_id_unique": {
+          "name": "criteria_results_criteria_id_unit_id_period_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "criteria_id",
+            "unit_id",
+            "period_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.criteria_targets": {
+      "name": "criteria_targets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "criteria_id": {
+          "name": "criteria_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_id": {
+          "name": "unit_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_value": {
+          "name": "target_value",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "criteria_targets_criteria_id_criteria_id_fk": {
+          "name": "criteria_targets_criteria_id_criteria_id_fk",
+          "tableFrom": "criteria_targets",
+          "tableTo": "criteria",
+          "columnsFrom": [
+            "criteria_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "criteria_targets_unit_id_units_id_fk": {
+          "name": "criteria_targets_unit_id_units_id_fk",
+          "tableFrom": "criteria_targets",
+          "tableTo": "units",
+          "columnsFrom": [
+            "unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "criteria_targets_period_id_evaluation_periods_id_fk": {
+          "name": "criteria_targets_period_id_evaluation_periods_id_fk",
+          "tableFrom": "criteria_targets",
+          "tableTo": "evaluation_periods",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "criteria_targets_criteria_id_unit_id_period_id_unique": {
+          "name": "criteria_targets_criteria_id_unit_id_period_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "criteria_id",
+            "unit_id",
+            "period_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.evaluation_period_clusters": {
+      "name": "evaluation_period_clusters",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": true
         },
@@ -153,9 +819,22 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "criteria_groups_cluster_id_clusters_id_fk": {
-          "name": "criteria_groups_cluster_id_clusters_id_fk",
-          "tableFrom": "criteria_groups",
+        "evaluation_period_clusters_period_id_evaluation_periods_id_fk": {
+          "name": "evaluation_period_clusters_period_id_evaluation_periods_id_fk",
+          "tableFrom": "evaluation_period_clusters",
+          "tableTo": "evaluation_periods",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "evaluation_period_clusters_cluster_id_clusters_id_fk": {
+          "name": "evaluation_period_clusters_cluster_id_clusters_id_fk",
+          "tableFrom": "evaluation_period_clusters",
           "tableTo": "clusters",
           "columnsFrom": [
             "cluster_id"
@@ -168,7 +847,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "evaluation_period_clusters_period_id_cluster_id_unique": {
+          "name": "evaluation_period_clusters_period_id_cluster_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "period_id",
+            "cluster_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -193,12 +881,6 @@
         "year": {
           "name": "year",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cluster_id": {
-          "name": "cluster_id",
-          "type": "varchar",
           "primaryKey": false,
           "notNull": true
         },
@@ -230,21 +912,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "evaluation_periods_cluster_id_clusters_id_fk": {
-          "name": "evaluation_periods_cluster_id_clusters_id_fk",
-          "tableFrom": "evaluation_periods",
-          "tableTo": "clusters",
-          "columnsFrom": [
-            "cluster_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -264,6 +932,12 @@
         },
         "period_id": {
           "name": "period_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cluster_id": {
+          "name": "cluster_id",
           "type": "varchar",
           "primaryKey": false,
           "notNull": true
@@ -335,6 +1009,19 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "evaluations_cluster_id_clusters_id_fk": {
+          "name": "evaluations_cluster_id_clusters_id_fk",
+          "tableFrom": "evaluations",
+          "tableTo": "clusters",
+          "columnsFrom": [
+            "cluster_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "evaluations_unit_id_units_id_fk": {
           "name": "evaluations_unit_id_units_id_fk",
           "tableFrom": "evaluations",
@@ -364,216 +1051,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.scores": {
-      "name": "scores",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "evaluation_id": {
-          "name": "evaluation_id",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "criteria_id": {
-          "name": "criteria_id",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "self_score": {
-          "name": "self_score",
-          "type": "numeric(5, 2)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "self_score_file": {
-          "name": "self_score_file",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "self_score_date": {
-          "name": "self_score_date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review1_score": {
-          "name": "review1_score",
-          "type": "numeric(5, 2)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review1_comment": {
-          "name": "review1_comment",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review1_file": {
-          "name": "review1_file",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review1_date": {
-          "name": "review1_date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review1_by": {
-          "name": "review1_by",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "explanation": {
-          "name": "explanation",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "explanation_file": {
-          "name": "explanation_file",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "explanation_date": {
-          "name": "explanation_date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review2_score": {
-          "name": "review2_score",
-          "type": "numeric(5, 2)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review2_comment": {
-          "name": "review2_comment",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review2_file": {
-          "name": "review2_file",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review2_date": {
-          "name": "review2_date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review2_by": {
-          "name": "review2_by",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "final_score": {
-          "name": "final_score",
-          "type": "numeric(5, 2)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "scores_evaluation_id_evaluations_id_fk": {
-          "name": "scores_evaluation_id_evaluations_id_fk",
-          "tableFrom": "scores",
-          "tableTo": "evaluations",
-          "columnsFrom": [
-            "evaluation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "scores_criteria_id_criteria_id_fk": {
-          "name": "scores_criteria_id_criteria_id_fk",
-          "tableFrom": "scores",
-          "tableTo": "criteria",
-          "columnsFrom": [
-            "criteria_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "scores_review1_by_users_id_fk": {
-          "name": "scores_review1_by_users_id_fk",
-          "tableFrom": "scores",
-          "tableTo": "users",
-          "columnsFrom": [
-            "review1_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "scores_review2_by_users_id_fk": {
-          "name": "scores_review2_by_users_id_fk",
-          "tableFrom": "scores",
-          "tableTo": "users",
-          "columnsFrom": [
-            "review2_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "scores_evaluation_id_criteria_id_unique": {
-          "name": "scores_evaluation_id_criteria_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "evaluation_id",
-            "criteria_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.units": {
       "name": "units",
       "schema": "",
@@ -587,6 +1064,12 @@
         },
         "name": {
           "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "short_name": {
+          "name": "short_name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -609,6 +1092,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -623,12 +1113,27 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "units_name_unique": {
+          "name": "units_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        },
+        "units_short_name_unique": {
+          "name": "units_short_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "short_name"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -678,6 +1183,19 @@
         "unit_id": {
           "name": "unit_id",
           "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "require_password_reset": {
+          "name": "require_password_reset",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "last_password_change": {
+          "name": "last_password_change",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },

@@ -26,13 +26,7 @@ import { z } from "zod";
 import { CriteriaScoreService } from "./criteriaScoreService";
 import { calculatePreliminaryScore, roundScore } from "./scoreCalculation";
 
-/**
- * Thin helper that delegates to transactional storage method.
- * All recalculation logic is in storage layer for proper transaction handling.
- */
-async function recalculateEvaluationScores(evaluationId: string): Promise<{ scoresUpdated: number }> {
-  return await storage.recalculateEvaluationScoresTx(evaluationId);
-}
+// Deprecated: recalculateEvaluationScores removed - scores table no longer exists
 
 declare global {
   namespace Express {
@@ -298,8 +292,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({
         ...userData,
         password: hashedPassword,
-        requirePasswordReset: true, // Force password reset on first login
-        lastPasswordChange: null,
       });
 
       res.json({
@@ -326,18 +318,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       req.login(user, (err) => {
         if (err) return next(err);
-        
-        // Check if user needs to reset password
-        if (user.requirePasswordReset) {
-          return res.json({
-            requirePasswordReset: true,
-            userId: user.id,
-            username: user.username,
-            fullName: user.fullName,
-            message: "Vui lòng đổi mật khẩu trước khi sử dụng hệ thống"
-          });
-        }
-        
         res.json(user);
       });
     })(req, res, next);
@@ -358,25 +338,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/change-password", requireAuth, async (req, res, next) => {
     try {
       const { currentPassword, newPassword } = z.object({
-        currentPassword: z.string().optional(),
+        currentPassword: z.string().min(1, "Vui lòng nhập mật khẩu hiện tại"),
         newPassword: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
       }).parse(req.body);
 
-      const user = await storage.getUserById(req.user!.id);
-      if (!user) {
+      // Get user with password from database
+      const userResult = await db.select().from(schema.users)
+        .where(eq(schema.users.id, req.user!.id))
+        .limit(1);
+      
+      if (!userResult || userResult.length === 0) {
         return res.status(404).json({ message: "Không tìm thấy người dùng" });
       }
+      
+      const user = userResult[0];
 
-      // If NOT first time (requirePasswordReset=false) → require current password
-      if (!user.requirePasswordReset) {
-        if (!currentPassword) {
-          return res.status(400).json({ message: "Vui lòng nhập mật khẩu hiện tại" });
-        }
-        
-        const isValid = await bcrypt.compare(currentPassword, user.password);
-        if (!isValid) {
-          return res.status(401).json({ message: "Mật khẩu hiện tại không đúng" });
-        }
+      // Verify current password
+      if (!currentPassword) {
+        return res.status(400).json({ message: "Vui lòng nhập mật khẩu hiện tại" });
+      }
+      
+      const isValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isValid) {
+        return res.status(401).json({ message: "Mật khẩu hiện tại không đúng" });
       }
 
       // Hash and update new password
@@ -384,7 +368,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.update(schema.users)
         .set({
           password: hashedPassword,
-          requirePasswordReset: false, // Clear flag
           lastPasswordChange: new Date(),
         })
         .where(eq(schema.users.id, user.id));
@@ -867,6 +850,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Criteria routes
+  // OLD CRITERIA ROUTES - Using groupId system (DEPRECATED)
+  // These routes have been replaced with the new tree-based criteria system
+  // See server/criteriaTreeRoutes.ts for the new endpoints
+  /*
   app.get("/api/criteria", requireAuth, async (req, res, next) => {
     try {
       const { groupId } = req.query;
@@ -1651,29 +1638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Recalculate finalScores (Admin only - for migration/maintenance)
-  app.post("/api/evaluations/:id/recalculate", requireRole("admin"), async (req, res, next) => {
-    try {
-      const evaluation = await storage.getEvaluation(req.params.id);
-      if (!evaluation) {
-        return res.status(404).json({ message: "Không tìm thấy đánh giá" });
-      }
-      
-      // Audit log for manual recalculation
-      console.log(`[ADMIN RECALCULATE] User ${req.user!.id} (${req.user!.username}) triggered recalculation for evaluation ${req.params.id}`);
-      
-      const result = await recalculateEvaluationScores(req.params.id);
-      
-      console.log(`[ADMIN RECALCULATE] Completed: ${result.scoresUpdated} scores updated for evaluation ${req.params.id}`);
-      
-      res.json({ 
-        message: "Đã tính lại điểm cuối cùng thành công",
-        scoresUpdated: result.scoresUpdated
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
+  // Deprecated: /api/evaluations/:id/recalculate removed - scores table no longer exists
 
   // Complete review 2 (Cluster leader)
   app.post("/api/evaluations/:id/review2", requireRole("admin", "cluster_leader"), async (req, res, next) => {
@@ -1735,248 +1700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Score routes removed - legacy table replaced by criteriaResults
 
-  // Bulk update scores for an evaluation (multi-stage scoring)
-  app.put("/api/evaluations/:id/scores", requireAuth, async (req, res, next) => {
-    try {
-      console.log("[PUT /api/evaluations/:id/scores] Request received:", {
-        evaluationId: req.params.id,
-        scoresCount: req.body.scores?.length,
-        scores: req.body.scores,
-      });
-      
-      const evaluation = await storage.getEvaluation(req.params.id);
-      if (!evaluation) {
-        return res.status(404).json({ message: "Không tìm thấy đánh giá" });
-      }
-      
-      // Check cluster ownership
-      const unit = await storage.getUnit(evaluation.unitId);
-      if (!unit) {
-        return res.status(404).json({ message: "Không tìm thấy đơn vị" });
-      }
-      
-      if (req.user!.role !== "admin") {
-        if (req.user!.role === "cluster_leader" && unit.clusterId !== req.user!.clusterId) {
-          return res.status(403).json({ message: "Bạn chỉ có thể cập nhật điểm của cụm mình" });
-        }
-        
-        if (req.user!.role === "user" && evaluation.unitId !== req.user!.unitId) {
-          return res.status(403).json({ message: "Bạn chỉ có thể cập nhật điểm của đơn vị mình" });
-        }
-      }
-      
-      // Parse and validate scores array - EXTENDED for all criteria types
-      const scoresData = z.array(z.object({
-        criteriaId: z.string(),
-        // Input fields for different criteria types
-        actualValue: z.number().optional(),      // Type 1 (Quantitative) & Type 3 (Fixed count)
-        isAchieved: z.boolean().optional(),      // Type 2 (Qualitative)
-        bonusCount: z.number().optional(),       // Type 4 (+/-)
-        penaltyCount: z.number().optional(),     // Type 4 (+/-)
-        calculatedScore: z.number().optional(),  // Auto-calculated score
-        // Review fields
-        selfScore: z.number().optional(),
-        selfScoreFile: z.string().optional(),
-        review1Score: z.number().optional(),
-        review1Comment: z.string().optional(),
-        review1File: z.string().optional(),
-        explanation: z.string().optional(),
-        review2Score: z.number().optional(),
-        review2Comment: z.string().optional(),
-        review2File: z.string().optional(),
-      })).parse(req.body.scores);
-      
-      // Stage-specific validation based on evaluation status and user role
-      for (const scoreData of scoresData) {
-        // Unit users can only update self-scoring before finalization
-        if (req.user!.role === "user") {
-          if (evaluation.status !== "draft" && evaluation.status !== "submitted") {
-            if (scoreData.selfScore !== undefined || scoreData.selfScoreFile !== undefined) {
-              return res.status(400).json({ message: "Chỉ có thể tự chấm điểm ở trạng thái nháp hoặc đã nộp" });
-            }
-          }
-          
-          // Unit users can only add explanation in review1_completed or explanation_submitted status
-          if (evaluation.status !== "review1_completed" && evaluation.status !== "explanation_submitted") {
-            if (scoreData.explanation !== undefined) {
-              return res.status(400).json({ message: "Chỉ có thể giải trình sau khi hoàn thành thẩm định lần 1" });
-            }
-          }
-          
-          // Unit users cannot update review scores
-          if (scoreData.review1Score !== undefined || scoreData.review1Comment !== undefined || scoreData.review1File !== undefined) {
-            return res.status(403).json({ message: "Bạn không có quyền thẩm định" });
-          }
-          if (scoreData.review2Score !== undefined || scoreData.review2Comment !== undefined || scoreData.review2File !== undefined) {
-            return res.status(403).json({ message: "Bạn không có quyền thẩm định" });
-          }
-        }
-        
-        // Cluster leaders validation (allow editing in appropriate states)
-        if (req.user!.role === "cluster_leader" || req.user!.role === "admin") {
-          // Can update review1 in submitted or later states (before finalized)
-          if (scoreData.review1Score !== undefined || scoreData.review1Comment !== undefined || scoreData.review1File !== undefined) {
-            if (evaluation.status === "draft") {
-              return res.status(400).json({ message: "Không thể thẩm định khi đơn vị chưa nộp" });
-            }
-            if (evaluation.status === "finalized") {
-              return res.status(400).json({ message: "Không thể sửa điểm đã hoàn tất" });
-            }
-          }
-          
-          // Can update review2 in explanation_submitted, review2_completed, or finalized states
-          if (scoreData.review2Score !== undefined || scoreData.review2Comment !== undefined || scoreData.review2File !== undefined) {
-            if (evaluation.status !== "explanation_submitted" && evaluation.status !== "review2_completed" && evaluation.status !== "finalized") {
-              return res.status(400).json({ message: "Chỉ có thể thẩm định lần 2 sau khi đơn vị giải trình" });
-            }
-          }
-        }
-      }
-      
-      // Fetch ALL existing scores once for this evaluation
-      const allExistingScores = await storage.getScores(req.params.id);
-      const updatedScores = [];
-      
-      for (const scoreData of scoresData) {
-        // Find existing score
-        let existingScore = allExistingScores.find(s => s.criteriaId === scoreData.criteriaId);
-        
-        let score;
-        if (existingScore) {
-          // Prepare update data with timestamps
-          const updateData: any = {};
-          
-          // Update input fields for different criteria types
-          if (scoreData.actualValue !== undefined) {
-            updateData.actualValue = scoreData.actualValue.toString();
-          }
-          if (scoreData.isAchieved !== undefined) {
-            updateData.isAchieved = scoreData.isAchieved ? 1 : 0;
-          }
-          if (scoreData.bonusCount !== undefined) {
-            updateData.bonusCount = scoreData.bonusCount;
-          }
-          if (scoreData.penaltyCount !== undefined) {
-            updateData.penaltyCount = scoreData.penaltyCount;
-          }
-          if (scoreData.calculatedScore !== undefined) {
-            updateData.calculatedScore = scoreData.calculatedScore.toString();
-          }
-          
-          if (scoreData.selfScore !== undefined) {
-            updateData.selfScore = scoreData.selfScore.toString();
-            updateData.selfScoreDate = new Date();
-          }
-          // Only update file URL if explicitly provided (not undefined/null)
-          if (scoreData.selfScoreFile !== undefined && scoreData.selfScoreFile !== null) {
-            updateData.selfScoreFile = scoreData.selfScoreFile;
-          }
-          
-          if (scoreData.review1Score !== undefined) {
-            updateData.review1Score = scoreData.review1Score.toString();
-            updateData.review1Date = new Date();
-          }
-          if (scoreData.review1Comment !== undefined) {
-            updateData.review1Comment = scoreData.review1Comment;
-          }
-          // Only update file URL if explicitly provided (not undefined/null)
-          if (scoreData.review1File !== undefined && scoreData.review1File !== null) {
-            updateData.review1File = scoreData.review1File;
-          }
-          
-          if (scoreData.explanation !== undefined) {
-            updateData.explanation = scoreData.explanation;
-            updateData.explanationDate = new Date();
-          }
-          
-          if (scoreData.review2Score !== undefined) {
-            updateData.review2Score = scoreData.review2Score.toString();
-            updateData.review2Date = new Date();
-          }
-          if (scoreData.review2Comment !== undefined) {
-            updateData.review2Comment = scoreData.review2Comment;
-          }
-          // Only update file URL if explicitly provided (not undefined/null)
-          if (scoreData.review2File !== undefined && scoreData.review2File !== null) {
-            updateData.review2File = scoreData.review2File;
-          }
-          
-          // Note: finalScore will be recalculated by helper function after all updates
-          score = await storage.updateScore(existingScore.id, updateData);
-          
-          // ALSO update criteriaResults table for new system compatibility
-          // Map review1Score -> clusterScore, review2Score -> finalScore
-          const criteriaResultUpdate: any = {
-            criteriaId: scoreData.criteriaId,
-            unitId: evaluation.unitId,
-            periodId: evaluation.periodId,
-          };
-          
-          if (scoreData.review1Score !== undefined) {
-            criteriaResultUpdate.clusterScore = scoreData.review1Score.toString();
-          }
-          if (scoreData.review2Score !== undefined) {
-            criteriaResultUpdate.finalScore = scoreData.review2Score.toString();
-          }
-          
-          // Only update if we have review scores to save
-          if (criteriaResultUpdate.clusterScore !== undefined || criteriaResultUpdate.finalScore !== undefined) {
-            console.log("[REVIEW SAVE] Updating criteriaResults:", criteriaResultUpdate);
-            const updated = await storage.upsertCriteriaResult(criteriaResultUpdate);
-            console.log("[REVIEW SAVE] CriteriaResult updated:", updated);
-          }
-        } else {
-          // Create new score
-          const newScore: any = {
-            evaluationId: req.params.id,
-            criteriaId: scoreData.criteriaId,
-          };
-          
-          // Set input fields for different criteria types
-          if (scoreData.actualValue !== undefined) {
-            newScore.actualValue = scoreData.actualValue.toString();
-          }
-          if (scoreData.isAchieved !== undefined) {
-            newScore.isAchieved = scoreData.isAchieved ? 1 : 0;
-          }
-          if (scoreData.bonusCount !== undefined) {
-            newScore.bonusCount = scoreData.bonusCount;
-          }
-          if (scoreData.penaltyCount !== undefined) {
-            newScore.penaltyCount = scoreData.penaltyCount;
-          }
-          if (scoreData.calculatedScore !== undefined) {
-            newScore.calculatedScore = scoreData.calculatedScore.toString();
-          }
-          
-          if (scoreData.selfScore !== undefined) {
-            newScore.selfScore = scoreData.selfScore.toString();
-            newScore.selfScoreDate = new Date();
-          }
-          if (scoreData.selfScoreFile !== undefined) {
-            newScore.selfScoreFile = scoreData.selfScoreFile;
-          }
-          
-          // Note: finalScore will be set by helper function after creation
-          score = await storage.createScore(newScore);
-        }
-        
-        updatedScores.push(score);
-      }
-      
-      // Recalculate finalScores and totals using helper function
-      await recalculateEvaluationScores(req.params.id);
-      
-      res.json({ message: "Cập nhật điểm thành công", scores: updatedScores });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Dữ liệu không hợp lệ", errors: error.errors });
-      }
-      next(error);
-    }
-  });
 
   // NEW: Upsert criteria result (Type 1-4 scoring)
   app.post("/api/criteria-results", requireAuth, async (req, res, next) => {

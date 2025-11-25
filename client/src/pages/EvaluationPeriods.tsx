@@ -584,11 +584,20 @@ export default function EvaluationPeriods() {
         }
       }
 
-      console.log("[REVIEW SAVE] Sending scores update:", [scoreData]);
+      console.log("[REVIEW SAVE] Sending review update:", scoreData);
+      
+      // Use new API endpoint for criteria_results
       const res = await apiRequest(
         "PUT",
-        `/api/evaluations/${evaluationId}/scores`,
-        { scores: [scoreData] },
+        `/api/criteria-results/review`,
+        {
+          criteriaId: scoreData.criteriaId,
+          unitId: currentUnitId,
+          periodId: currentPeriodId,
+          reviewType: reviewType,
+          score: score,
+          comment: comment,
+        },
       );
       const result = await res.json();
       console.log("[REVIEW SAVE] Update successful, result:", result);

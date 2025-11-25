@@ -401,11 +401,15 @@ export class DatabaseStorage implements IStorage {
     await db.delete(schema.criteriaGroups).where(eq(schema.criteriaGroups.id, id));
   }
 
+  // Legacy methods - use criteriaTreeStorage instead
   async getCriteria(groupId: string): Promise<Criteria[]> {
-    return await db.select().from(schema.criteria).where(eq(schema.criteria.groupId, groupId));
+    // Old method using groupId - no longer supported
+    // Use criteriaTreeStorage.getCriteria(periodId, clusterId) instead
+    return [];
   }
 
   async getCriteriaById(id: string): Promise<Criteria | undefined> {
+    // Still supported - query by ID works without groupId
     const result = await db.select().from(schema.criteria).where(eq(schema.criteria.id, id)).limit(1);
     return result[0];
   }
@@ -807,15 +811,22 @@ export class DatabaseStorage implements IStorage {
     const resultsMap = new Map(criteriaResults.map(r => [r.criteriaId, r]));
     
     // Get all criteria targets for this period+unit
-    const criteriaTargets = await db
-      .select()
-      .from(schema.criteriaTargets)
-      .where(
-        and(
-          eq(schema.criteriaTargets.periodId, periodId),
-          eq(schema.criteriaTargets.unitId, unitId)
-        )
-      );
+    console.log('[DEBUG] Querying criteriaTargets for:', { periodId, unitId });
+    let criteriaTargets;
+    try {
+      criteriaTargets = await db
+        .select()
+        .from(schema.criteriaTargets)
+        .where(
+          and(
+            eq(schema.criteriaTargets.periodId, periodId),
+            eq(schema.criteriaTargets.unitId, unitId)
+          )
+        );
+    } catch (error: any) {
+      console.error('[DEBUG] Error querying criteriaTargets:', error.message);
+      throw error;
+    }
     const targetsMap = new Map(criteriaTargets.map(t => [t.criteriaId, t]));
     
     // Old scores table removed - all data now in criteriaResults
