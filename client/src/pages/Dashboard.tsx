@@ -47,13 +47,6 @@ export default function Dashboard({ role }: DashboardProps) {
     },
   });
 
-  // Auto-select cluster based on role
-  useEffect(() => {
-    if (user?.role === "cluster_leader" && user.clusterId && selectedClusterId === "ALL") {
-      setSelectedClusterId(user.clusterId);
-    }
-  }, [user, selectedClusterId]);
-
   // Fetch all units in the system
   const { data: units = [] } = useQuery<Unit[]>({
     queryKey: ["/api/units"],
@@ -63,6 +56,19 @@ export default function Dashboard({ role }: DashboardProps) {
       return res.json();
     },
   });
+
+  // Auto-select cluster based on role
+  useEffect(() => {
+    if (user?.role === "cluster_leader" && user.clusterId && selectedClusterId === "ALL") {
+      setSelectedClusterId(user.clusterId);
+    } else if (user?.role === "user" && user.unitId && selectedClusterId === "ALL" && units.length > 0) {
+      // For user role, get clusterId from their unit
+      const userUnit = units.find(u => u.id === user.unitId);
+      if (userUnit?.clusterId) {
+        setSelectedClusterId(userUnit.clusterId);
+      }
+    }
+  }, [user, selectedClusterId, units]);
 
   // Fetch all evaluations to calculate submitted count
   const { data: evaluations = [] } = useQuery<Evaluation[]>({
