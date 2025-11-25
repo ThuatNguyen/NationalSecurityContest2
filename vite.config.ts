@@ -32,6 +32,41 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'es2020',
     minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // React core
+          'react-vendor': ['react', 'react-dom', 'react/jsx-runtime'],
+          // Router
+          'router': ['wouter'],
+          // React Query
+          'query': ['@tanstack/react-query'],
+          // UI components - split into smaller chunks
+          'ui-core': [
+            '@/components/ui/button',
+            '@/components/ui/card',
+            '@/components/ui/input',
+            '@/components/ui/label',
+            '@/components/ui/select',
+            '@/components/ui/dialog',
+            '@/components/ui/dropdown-menu',
+          ],
+          'ui-extended': [
+            '@/components/ui/table',
+            '@/components/ui/tooltip',
+            '@/components/ui/tabs',
+            '@/components/ui/progress',
+            '@/components/ui/checkbox',
+            '@/components/ui/alert',
+          ],
+          // Icons
+          'icons': ['lucide-react'],
+          // Excel export
+          'excel': ['exceljs'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600, // Increase limit to 600kb
   },
   server: {
     host: "0.0.0.0",

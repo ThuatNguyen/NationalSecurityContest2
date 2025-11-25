@@ -715,7 +715,8 @@ export class DatabaseStorage implements IStorage {
   }
   */
 
-  // Recalculate finalScores (transactional)
+  // OLD RECALCULATE METHOD - DISABLED (uses deleted scores table)
+  /*
   async recalculateEvaluationScoresTx(evaluationId: string): Promise<{ scoresUpdated: number }> {
     return await db.transaction(async (tx) => {
       // Fetch all scores for this evaluation within transaction
@@ -782,6 +783,7 @@ export class DatabaseStorage implements IStorage {
       return { scoresUpdated: scores.length };
     });
   }
+  */
 
   // NEW EVALUATION SUMMARY METHOD - Tree-based criteria
   async getEvaluationSummaryTree(periodId: string, unitId: string) {
