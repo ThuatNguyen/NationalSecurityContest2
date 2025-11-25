@@ -16,6 +16,7 @@ import CriteriaScoring from "@/pages/CriteriaScoring";
 import UsersManagement from "@/pages/UsersManagement";
 import EvaluationPeriods from "@/pages/EvaluationPeriods";
 import Reports from "@/pages/Reports";
+import ComprehensiveReports from "@/pages/ComprehensiveReports";
 import CompetitionManagement from "@/pages/CompetitionManagement";
 import CompetitionDetail from "@/pages/CompetitionDetail";
 import { useState } from "react";
@@ -55,6 +56,7 @@ function Router({ role }: { role: "admin" | "cluster_leader" | "user" }) {
       <Route path="/" component={() => <Dashboard role={role} />} />
       <Route path="/periods" component={EvaluationPeriods} />
       <Route path="/reports" component={Reports} />
+      <Route path="/reports/comprehensive" component={ComprehensiveReports} />
       <Route path="/scoring" component={() => <ScoringPage role={role} />} />
       <Route path="/self-scoring" component={() => <ScoringPage role="user" />} />
       <Route path="/settings/units">

@@ -2978,6 +2978,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Register report routes
+  const { registerReportRoutes } = await import("./reportRoutes");
+  registerReportRoutes(app, requireAuth);
+
   const httpServer = createServer(app);
 
   return httpServer;

@@ -1,10 +1,11 @@
 import FilterPanel from "@/components/FilterPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileDown, Printer } from "lucide-react";
+import { FileDown, Printer, FileSpreadsheet } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { CriteriaMatrixTable } from "@/components/CriteriaMatrixTable";
+import { Link } from "wouter";
 
 interface User {
   id: string;
@@ -178,9 +179,17 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Báo cáo thi đua</h1>
-        <p className="text-muted-foreground mt-1">Tổng hợp kết quả chấm điểm theo cụm</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Báo cáo thi đua</h1>
+          <p className="text-muted-foreground mt-1">Tổng hợp kết quả chấm điểm theo cụm</p>
+        </div>
+        <Link href="/reports/comprehensive">
+          <Button variant="outline">
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Báo cáo tổng hợp mới
+          </Button>
+        </Link>
       </div>
 
       <FilterPanel 
