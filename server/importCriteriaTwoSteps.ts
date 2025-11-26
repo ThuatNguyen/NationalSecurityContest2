@@ -2,6 +2,11 @@ import { db } from "./db";
 import { sql, eq } from "drizzle-orm";
 import { evaluationPeriods, clusters } from "../shared/schema";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 interface CriteriaRow {
   id: string;
@@ -67,11 +72,15 @@ async function importCriteriaTwoSteps() {
     const NEW_CLUSTER_ID = clusterList[0].id;
     console.log(`   ✓ Cluster: ${clusterList[0].name} (${NEW_CLUSTER_ID})`);
 
-    // Đọc file SQL
-    const sqlContent = fs.readFileSync(
-      "/home/tnt/PX03/NationalSecurityContest2/attached_assets/contestdb.sql",
-      "utf-8"
-    );
+    // Đọc file SQL - sử dụng đường dẫn tương đối từ thư mục project
+    const sqlFilePath = path.join(__dirname, "..", "attached_assets", "contestdb.sql");
+    console.log(`\n📂 Đọc file: ${sqlFilePath}`);
+    
+    if (!fs.existsSync(sqlFilePath)) {
+      throw new Error(`Không tìm thấy file SQL tại: ${sqlFilePath}`);
+    }
+    
+    const sqlContent = fs.readFileSync(sqlFilePath, "utf-8");
 
     // Extract COPY criteria section
     const criteriaStart = sqlContent.indexOf("COPY public.criteria");
