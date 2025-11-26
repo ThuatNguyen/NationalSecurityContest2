@@ -85,7 +85,7 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
   },
   { 
     title: "Báo cáo", 
-    url: "/reports", 
+    url: "/reports/comprehensive", 
     icon: FileText, 
     testId: "nav-reports",
     allowedRoles: ["admin", "cluster_leader", "user"]

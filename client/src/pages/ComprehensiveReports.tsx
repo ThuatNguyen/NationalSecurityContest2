@@ -44,7 +44,7 @@ export default function ComprehensiveReportsPage() {
   const { toast } = useToast();
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
   const [selectedClusterId, setSelectedClusterId] = useState<string>("");
-  const [selectedGroupId, setSelectedGroupId] = useState<string>("all");
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
 
   // Fetch current user
   const { data: user } = useQuery<User>({
@@ -149,10 +149,17 @@ export default function ComprehensiveReportsPage() {
     },
   });
 
+  // Auto-select first group when summaryData loads
+  useEffect(() => {
+    if (summaryData?.criteriaGroups && summaryData.criteriaGroups.length > 0 && !selectedGroupId) {
+      setSelectedGroupId(summaryData.criteriaGroups[0].id);
+    }
+  }, [summaryData, selectedGroupId]);
+
   // Fetch group detail report
   const { data: groupDetailData, isLoading: detailLoading } = useQuery({
     queryKey: ["/api/reports/group-detail", selectedPeriodId, selectedClusterId, selectedGroupId],
-    enabled: !!selectedPeriodId && !!selectedClusterId,
+    enabled: !!selectedPeriodId && !!selectedClusterId && !!selectedGroupId,
     queryFn: async () => {
       const params = new URLSearchParams({
         periodId: selectedPeriodId,
@@ -224,6 +231,208 @@ export default function ComprehensiveReportsPage() {
     window.print();
   };
 
+  const handlePrintUnitScores = () => {
+    const table = document.getElementById('unit-scores-table');
+    if (!table) return;
+    
+    // Create a print window with only the table content
+    const printContent = table.cloneNode(true) as HTMLElement;
+    
+    // Remove buttons from cloned content
+    const buttons = printContent.querySelectorAll('button');
+    buttons.forEach(btn => btn.remove());
+    
+    const printWindow = window.open('', '', 'width=800,height=600');
+    if (!printWindow) return;
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>BẢNG ĐIỂM ĐƠN VỊ TRONG CỤM</title>
+          <style>
+            body { 
+              font-family: system-ui, -apple-system, sans-serif; 
+              padding: 20px;
+              margin: 0;
+            }
+            h1, h2, h3 { 
+              text-align: center; 
+              text-transform: uppercase;
+              margin: 10px 0;
+              font-size: 18pt;
+            }
+            p {
+              text-align: center;
+              margin: 5px 0;
+              font-size: 12pt;
+              color: #666;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-top: 20px;
+            }
+            th, td { 
+              border: 1px solid #666; 
+              padding: 8px; 
+              text-align: left;
+            }
+            th { 
+              background-color: #f3f4f6; 
+              font-weight: 600;
+            }
+            .text-center { text-align: center; }
+            .text-muted-foreground { color: #666; }
+            @media print {
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
+  const handlePrintSummary = () => {
+    const report = document.getElementById('summary-report');
+    if (!report) return;
+    
+    const printContent = report.cloneNode(true) as HTMLElement;
+    const buttons = printContent.querySelectorAll('button');
+    buttons.forEach(btn => btn.remove());
+    
+    const printWindow = window.open('', '', 'width=1200,height=800');
+    if (!printWindow) return;
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Bảng tổng hợp điểm thi đua</title>
+          <style>
+            body { 
+              font-family: system-ui, -apple-system, sans-serif; 
+              padding: 20px;
+              margin: 0;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              font-size: 11pt;
+            }
+            th, td { 
+              border: 1px solid #666; 
+              padding: 6px; 
+            }
+            th { 
+              background-color: #f3f4f6; 
+              font-weight: 600;
+            }
+            .text-center { text-align: center; }
+            .text-left { text-align: left; }
+            .font-semibold { font-weight: 600; }
+            .bg-gray-50 { background-color: #f9fafb; }
+            .bg-gray-100 { background-color: #f3f4f6; }
+            .bg-gray-200 { background-color: #e5e7eb; }
+            h1 { text-align: center; font-size: 18pt; margin: 10px 0; }
+            p { text-align: center; margin: 5px 0; }
+            @media print {
+              @page { size: A4 landscape; margin: 1cm; }
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
+  const handlePrintGroupDetail = () => {
+    const report = document.getElementById('group-detail-report');
+    if (!report) return;
+    
+    const printContent = report.cloneNode(true) as HTMLElement;
+    const buttons = printContent.querySelectorAll('button');
+    buttons.forEach(btn => btn.remove());
+    const selects = printContent.querySelectorAll('.no-print');
+    selects.forEach(el => el.remove());
+    
+    const printWindow = window.open('', '', 'width=1200,height=800');
+    if (!printWindow) return;
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Báo cáo chi tiết theo nhóm</title>
+          <style>
+            body { 
+              font-family: system-ui, -apple-system, sans-serif; 
+              padding: 20px;
+              margin: 0;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              font-size: 10pt;
+              margin-bottom: 30px;
+            }
+            th, td { 
+              border: 1px solid #666; 
+              padding: 6px; 
+            }
+            th { 
+              background-color: #f3f4f6; 
+              font-weight: 600;
+            }
+            .text-center { text-align: center; }
+            .text-left { text-align: left; }
+            .font-semibold { font-weight: 600; }
+            .bg-gray-50 { background-color: #f9fafb; }
+            .bg-gray-100 { background-color: #f3f4f6; }
+            h2 { text-align: center; font-size: 14pt; margin: 10px 0; }
+            p { text-align: center; margin: 5px 0; font-size: 11pt; }
+            @media print {
+              @page { size: A4 landscape; margin: 1cm; }
+              body { padding: 0; }
+              .space-y-6 > * { page-break-after: always; }
+              .space-y-6 > *:last-child { page-break-after: auto; }
+            }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between no-print">
@@ -287,19 +496,6 @@ export default function ComprehensiveReportsPage() {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          {selectedPeriodId && selectedClusterId && (
-            <div className="flex gap-2 border-t pt-4 mt-4">
-              <Button onClick={handlePrint} variant="outline">
-                <Printer className="mr-2 h-4 w-4" />
-                In báo cáo
-              </Button>
-              <Button onClick={handleExportExcel} variant="outline">
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
-                Xuất Excel
-              </Button>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -338,9 +534,26 @@ export default function ComprehensiveReportsPage() {
 
       {/* Unit Scores Table */}
       {selectedPeriodId && selectedClusterId && unitScores && unitScores.length > 0 && (
-        <Card className="no-print">
+        <Card id="unit-scores-table">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Bảng điểm đơn vị trong cụm</CardTitle>
+            <div className="flex-1">
+              <CardTitle className="text-center text-xl uppercase">
+                BẢNG ĐIỂM ĐƠN VỊ TRONG CỤM
+              </CardTitle>
+              <p className="text-center text-sm text-muted-foreground mt-1">
+                {clusters?.find(c => c.id === selectedClusterId)?.name} - Năm {periods?.find(p => p.id === selectedPeriodId)?.year}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handlePrintUnitScores} variant="outline" size="sm">
+                <Printer className="mr-2 h-4 w-4" />
+                In báo cáo
+              </Button>
+              <Button onClick={handleExportExcel} size="sm">
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Xuất Excel
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -362,14 +575,14 @@ export default function ComprehensiveReportsPage() {
                       <td className="p-3">{index + 1}</td>
                       <td className="p-3 font-medium">{score.unitName}</td>
                       <td className="p-3 text-center">
-                        {score.selfScore > 0 ? `${score.selfScore.toFixed(1)}/${score.totalMaxScore.toFixed(1)}` : "-"}
+                        {score.selfScore > 0 ? `${score.selfScore.toFixed(1)}/${score.maxScoreAssigned.toFixed(1)}` : "-"}
                       </td>
                       <td className="p-3 text-center">
-                        {score.clusterScore > 0 ? `${score.clusterScore.toFixed(1)}/${score.totalMaxScore.toFixed(1)}` : "-"}
+                        {score.clusterScore > 0 ? `${score.clusterScore.toFixed(1)}/${score.maxScoreAssigned.toFixed(1)}` : "-"}
                       </td>
                       <td className="p-3 text-center">
-                        {score.clusterScore > 0 && score.totalMaxScore > 0 
-                          ? `${((score.clusterScore / score.totalMaxScore) * 100).toFixed(1)}%` 
+                        {score.clusterScore > 0 && score.maxScoreAssigned > 0 
+                          ? `${((score.clusterScore / score.maxScoreAssigned) * 100).toFixed(1)}%` 
                           : "-"}
                       </td>
                       <td className="p-3 text-center">
@@ -406,31 +619,20 @@ export default function ComprehensiveReportsPage() {
             <SummaryReport 
               data={summaryData} 
               loading={summaryLoading}
+              onPrint={handlePrintSummary}
+              onExportExcel={handleExportExcel}
             />
           </TabsContent>
 
           <TabsContent value="detail" className="space-y-4 print:block">
-            {summaryData?.criteriaGroups && (
-              <div className="mb-4 no-print">
-                <Label>Chọn nhóm tiêu chí</Label>
-                <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-                  <SelectTrigger className="w-full md:w-[300px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả nhóm</SelectItem>
-                    {summaryData.criteriaGroups.map((group: any) => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
             <GroupDetailReport 
               data={groupDetailData} 
               loading={detailLoading}
+              onPrint={handlePrintGroupDetail}
+              onExportExcel={handleExportExcel}
+              criteriaGroups={summaryData?.criteriaGroups}
+              selectedGroupId={selectedGroupId}
+              onGroupChange={setSelectedGroupId}
             />
           </TabsContent>
         </Tabs>
@@ -440,7 +642,7 @@ export default function ComprehensiveReportsPage() {
 }
 
 // Summary Report Component
-function SummaryReport({ data, loading }: any) {
+function SummaryReport({ data, loading, onPrint, onExportExcel }: any) {
   if (loading) {
     return <Card><CardContent className="p-6">Đang tải dữ liệu...</CardContent></Card>;
   }
@@ -452,14 +654,28 @@ function SummaryReport({ data, loading }: any) {
   const { period, cluster, units, criteriaGroups } = data;
 
   return (
-    <Card className="print:shadow-none print:border-0">
+    <Card className="print:shadow-none print:border-0" id="summary-report">
       <CardHeader className="print:pb-2 print:pt-0">
-        <CardTitle className="text-center text-xl print:text-lg">
-          BẢNG TỔNG HỢP ĐIỂM THI ĐUA - {cluster.name}
-        </CardTitle>
-        <p className="text-center text-sm text-muted-foreground print:text-black">
-          Kỳ thi đua: {period.name}
-        </p>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <CardTitle className="text-center text-xl print:text-lg">
+              BẢNG TỔNG HỢP ĐIỂM THI ĐUA - {cluster.name}
+            </CardTitle>
+            <p className="text-center text-sm text-muted-foreground print:text-black">
+              Kỳ thi đua: {period.name}
+            </p>
+          </div>
+          <div className="flex gap-2 no-print">
+            <Button onClick={onPrint} variant="outline" size="sm">
+              <Printer className="mr-2 h-4 w-4" />
+              In báo cáo
+            </Button>
+            <Button onClick={onExportExcel} size="sm">
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Xuất Excel
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="print:p-0">
         <div className="overflow-x-auto">
@@ -543,7 +759,7 @@ function SummaryReport({ data, loading }: any) {
 }
 
 // Group Detail Report Component
-function GroupDetailReport({ data, loading }: any) {
+function GroupDetailReport({ data, loading, onPrint, onExportExcel, criteriaGroups, selectedGroupId, onGroupChange }: any) {
   if (loading) {
     return <Card><CardContent className="p-6">Đang tải dữ liệu...</CardContent></Card>;
   }
@@ -555,29 +771,72 @@ function GroupDetailReport({ data, loading }: any) {
   const { period, cluster, units, groups } = data;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" id="group-detail-report">
       {groups.map((group: any) => (
         <Card key={group.groupId} className="print:shadow-none print:border-0 print:break-after-page">
           <CardHeader className="print:pb-2 print:pt-0">
-            <CardTitle className="text-center text-lg print:text-base">
-              {group.groupName} ({group.groupMaxScore} điểm)
-            </CardTitle>
-            <p className="text-center text-sm text-muted-foreground print:text-black">
-              {cluster.name} - {period.name}
-            </p>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <CardTitle className="text-center text-lg print:text-base">
+                  {group.groupName} ({group.groupMaxScore} điểm)
+                </CardTitle>
+                <p className="text-center text-sm text-muted-foreground print:text-black">
+                  {cluster.name} - {period.name}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 no-print">
+                {criteriaGroups && criteriaGroups.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm whitespace-nowrap">Chọn nhóm:</Label>
+                    <Select value={selectedGroupId} onValueChange={onGroupChange}>
+                      <SelectTrigger className="w-[250px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {criteriaGroups.map((g: any) => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <Button onClick={onPrint} variant="outline" size="sm">
+                  <Printer className="mr-2 h-4 w-4" />
+                  In báo cáo
+                </Button>
+                <Button onClick={onExportExcel} size="sm">
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Xuất Excel
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="print:p-0">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-300 text-sm">
                 <thead>
                   <tr className="bg-gray-100">
-                    <th className="border border-gray-300 p-2 text-left font-semibold w-1/3">
+                    <th rowSpan={2} className="border border-gray-300 p-2 text-left font-semibold w-1/3 align-middle">
                       Tiêu chí
                     </th>
                     {units.map((unit: any) => (
-                      <th key={unit.id} className="border border-gray-300 p-2 text-center font-semibold">
+                      <th key={unit.id} colSpan={2} className="border border-gray-300 p-2 text-center font-semibold">
                         {unit.name}
                       </th>
+                    ))}
+                  </tr>
+                  <tr className="bg-gray-100">
+                    {units.map((unit: any) => (
+                      <>
+                        <th key={`${unit.id}-dtc`} className="border border-gray-300 p-1 text-center font-semibold text-xs">
+                          ĐTC
+                        </th>
+                        <th key={`${unit.id}-td`} className="border border-gray-300 p-1 text-center font-semibold text-xs">
+                          TĐ
+                        </th>
+                      </>
                     ))}
                   </tr>
                 </thead>
@@ -598,37 +857,26 @@ function GroupDetailReport({ data, loading }: any) {
                           
                           if (!unitData.isAssigned) {
                             return (
-                              <td key={unit.id} className="border border-gray-300 p-2 text-center text-gray-400">
-                                KP
-                              </td>
+                              <>
+                                <td key={`${unit.id}-dtc`} className="border border-gray-300 p-2 text-center text-gray-400">
+                                  KP
+                                </td>
+                                <td key={`${unit.id}-td`} className="border border-gray-300 p-2 text-center text-gray-400">
+                                  KP
+                                </td>
+                              </>
                             );
-                          }
-
-                          if (row.isParent) {
-                            // Parent nodes: show aggregated score
-                            return (
-                              <td key={unit.id} className="border border-gray-300 p-2 text-center">
-                                {unitData.clusterScore !== null ? unitData.clusterScore.toFixed(1) : "-"}
-                              </td>
-                            );
-                          }
-
-                          // Leaf nodes: show detailed scores
-                          const scores = [];
-                          if (unitData.selfScore !== null) {
-                            scores.push(`ĐTC: ${unitData.selfScore.toFixed(1)}`);
-                          }
-                          if (unitData.clusterScore !== null) {
-                            scores.push(`TĐ1: ${unitData.clusterScore.toFixed(1)}`);
-                          }
-                          if (unitData.finalScore !== null) {
-                            scores.push(`TĐ2: ${unitData.finalScore.toFixed(1)}`);
                           }
 
                           return (
-                            <td key={unit.id} className="border border-gray-300 p-2 text-center text-xs">
-                              {scores.length > 0 ? scores.join(' | ') : "-"}
-                            </td>
+                            <>
+                              <td key={`${unit.id}-dtc`} className="border border-gray-300 p-2 text-center">
+                                {unitData.selfScore !== null ? unitData.selfScore.toFixed(1) : "-"}
+                              </td>
+                              <td key={`${unit.id}-td`} className="border border-gray-300 p-2 text-center">
+                                {unitData.clusterScore !== null ? unitData.clusterScore.toFixed(1) : "-"}
+                              </td>
+                            </>
                           );
                         })}
                       </tr>
