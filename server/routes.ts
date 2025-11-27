@@ -1670,6 +1670,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Request revision - Return to draft for editing (Admin/Cluster leader)
+  app.post("/api/evaluations/:id/request-revision", requireRole("admin", "cluster_leader"), async (req, res, next) => {
+    try {
+      const { reason } = req.body;
+      
+      if (!reason || reason.trim() === "") {
+        return res.status(400).json({ message: "Vui lòng nhập lý do yêu cầu chỉnh sửa" });
+      }
+
+      const evaluation = await storage.getEvaluation(req.params.id);
+      if (!evaluation) {
+        return res.status(404).json({ message: "Không tìm thấy đánh giá" });
+      }
+      
+      const unit = await storage.getUnit(evaluation.unitId);
+      if (!unit) {
+        return res.status(404).json({ message: "Không tìm thấy đơn vị" });
+      }
+      
+      // Cluster leaders can only request revision for their cluster's evaluations
+      if (req.user!.role === "cluster_leader" && unit.clusterId !== req.user!.clusterId) {
+        return res.status(403).json({ message: "Bạn chỉ có thể yêu cầu chỉnh sửa đánh giá của cụm mình" });
+      }
+      
+      // Can only request revision from submitted or review1_completed status
+      if (evaluation.status !== "submitted" && evaluation.status !== "review1_completed") {
+        return res.status(400).json({ message: "Chỉ có thể yêu cầu chỉnh sửa đánh giá đã nộp hoặc đã thẩm định" });
+      }
+      
+      // Return to draft status with revision note
+      const updated = await storage.updateEvaluation(req.params.id, { 
+        status: "draft"
+      });
+      
+      // TODO: Send notification to unit with reason
+      // await sendNotification(unit.id, `Yêu cầu chỉnh sửa: ${reason}`);
+      
+      res.json({ 
+        ...updated, 
+        revisionReason: reason,
+        message: "Đã yêu cầu đơn vị chỉnh sửa" 
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // Finalize evaluation (Admin/Cluster leader)
   app.post("/api/evaluations/:id/finalize", requireRole("admin", "cluster_leader"), async (req, res, next) => {
     try {

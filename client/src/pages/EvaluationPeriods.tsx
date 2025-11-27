@@ -7,12 +7,13 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { FileText, RefreshCw, Send, FileSpreadsheet, Printer } from "lucide-react";
+import { FileText, RefreshCw, Send, FileSpreadsheet, Printer, Undo2 } from "lucide-react";
 import { useState, useMemo, useEffect, Fragment, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSession } from "@/lib/useSession";
@@ -877,6 +878,64 @@ export default function EvaluationPeriods() {
   };
 
   // Mutation for batch recalculating scores
+  // Request revision mutation
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
+  const [revisionReason, setRevisionReason] = useState("");
+  const [selectedEvaluationForRevision, setSelectedEvaluationForRevision] = useState<string | null>(null);
+
+  // Debug dialog state
+  useEffect(() => {
+    console.log("revisionDialogOpen changed:", revisionDialogOpen);
+  }, [revisionDialogOpen]);
+
+  const requestRevisionMutation = useMutation({
+    mutationFn: async ({ evaluationId, reason }: { evaluationId: string; reason: string }) => {
+      console.log("Calling request-revision API:", { evaluationId, reason });
+      const res = await apiRequest("POST", `/api/evaluations/${evaluationId}/request-revision`, {
+        reason,
+      });
+      const data = await res.json();
+      console.log("Request-revision response:", data);
+      return data;
+    },
+    onSuccess: async (data) => {
+      console.log("Request revision success:", data);
+      toast({
+        title: "Thành công",
+        description: "Đã yêu cầu đơn vị chỉnh sửa",
+      });
+      
+      // Refetch data
+      await queryClient.refetchQueries({
+        queryKey: ["/api/evaluation-periods", selectedPeriod?.id, "units"],
+      });
+      
+      if (selectedUnitId) {
+        await queryClient.refetchQueries({
+          queryKey: [
+            "/api/evaluation-periods",
+            selectedPeriod?.id,
+            "units",
+            selectedUnitId,
+            "summary",
+          ],
+        });
+      }
+      
+      setRevisionDialogOpen(false);
+      setRevisionReason("");
+      setSelectedEvaluationForRevision(null);
+    },
+    onError: (error: any) => {
+      console.error("Request revision error:", error);
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: error.message || "Không thể yêu cầu chỉnh sửa",
+      });
+    },
+  });
+
   const recalculateScoresMutation = useMutation({
     mutationFn: async () => {
       const currentPeriodId = selectedPeriod?.id;
@@ -1484,17 +1543,41 @@ export default function EvaluationPeriods() {
               {(user.role === "admin" || user.role === "cluster_leader") &&
                 selectedPeriod &&
                 selectedClusterId && (
-                  <Button
-                    variant="outline"
-                    onClick={handleRecalculateScores}
-                    disabled={recalculateScoresMutation.isPending}
-                    data-testid="button-recalculate-scores"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${recalculateScoresMutation.isPending ? 'animate-spin' : ''}`} />
-                    {recalculateScoresMutation.isPending
-                      ? "Đang tính..."
-                      : "Tính lại điểm cụm"}
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={handleRecalculateScores}
+                      disabled={recalculateScoresMutation.isPending}
+                      data-testid="button-recalculate-scores"
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${recalculateScoresMutation.isPending ? 'animate-spin' : ''}`} />
+                      {recalculateScoresMutation.isPending
+                        ? "Đang tính..."
+                        : "Tính lại điểm cụm"}
+                    </Button>
+                    
+                    {/* Request revision button */}
+                    {summary?.evaluation && 
+                     (summary.evaluation.status === "submitted" || summary.evaluation.status === "review1_completed") && (
+                      <Button
+                        className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-2 border-yellow-400"
+                        onClick={() => {
+                          console.log("Request revision button clicked:", summary?.evaluation?.id);
+                          console.log("Before setState - revisionDialogOpen:", revisionDialogOpen);
+                          if (summary?.evaluation?.id) {
+                            setSelectedEvaluationForRevision(summary.evaluation.id);
+                            setRevisionDialogOpen(true);
+                            console.log("After setState - should be true");
+                          }
+                        }}
+                        disabled={requestRevisionMutation.isPending}
+                        data-testid="button-request-revision"
+                      >
+                        <Undo2 className="w-4 h-4 mr-2" />
+                        Yêu cầu chỉnh sửa
+                      </Button>
+                    )}
+                  </>
                 )}
             </div>
           )}
@@ -2075,6 +2158,55 @@ export default function EvaluationPeriods() {
           )}
         </>
       )}
+
+      {/* Request Revision Dialog - Always render to avoid unmounting */}
+      <Dialog open={revisionDialogOpen} onOpenChange={setRevisionDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yêu cầu chỉnh sửa</DialogTitle>
+            <DialogDescription>
+              Nhập lý do yêu cầu đơn vị chỉnh sửa lại phiếu chấm điểm
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Lý do yêu cầu chỉnh sửa <span className="text-red-500">*</span></label>
+              <Textarea
+                className="w-full mt-1"
+                rows={4}
+                placeholder="Nhập lý do cụ thể tại sao cần chỉnh sửa..."
+                value={revisionReason}
+                onChange={(e) => setRevisionReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setRevisionDialogOpen(false);
+                setRevisionReason("");
+                setSelectedEvaluationForRevision(null);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button 
+              onClick={() => {
+                if (selectedEvaluationForRevision && revisionReason.trim()) {
+                  requestRevisionMutation.mutate({
+                    evaluationId: selectedEvaluationForRevision,
+                    reason: revisionReason.trim()
+                  });
+                }
+              }}
+              disabled={!revisionReason.trim() || requestRevisionMutation.isPending}
+            >
+              {requestRevisionMutation.isPending ? "Đang xử lý..." : "Xác nhận"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Print-Only Section */}
       {summary && selectedPeriod && selectedCluster && selectedUnit && (
