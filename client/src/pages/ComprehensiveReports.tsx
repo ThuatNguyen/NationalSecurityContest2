@@ -66,17 +66,6 @@ export default function ComprehensiveReportsPage() {
     },
   });
 
-  // Fetch unit to get clusterId for regular users
-  const { data: userUnit } = useQuery({
-    queryKey: ["/api/units", user?.unitId],
-    enabled: !!user?.unitId && user?.role === "user",
-    queryFn: async () => {
-      const res = await fetch(`/api/units/${user?.unitId}`);
-      if (!res.ok) throw new Error("Failed to fetch unit");
-      return res.json();
-    },
-  });
-
   // Fetch clusters for selected period
   const { data: clusters } = useQuery<Cluster[]>({
     queryKey: ["/api/evaluation-periods", selectedPeriodId, "clusters"],
@@ -95,33 +84,43 @@ export default function ComprehensiveReportsPage() {
     }
   }, [periods, selectedPeriodId]);
 
-  // Auto-select default cluster based on user role
+  // Auto-select default cluster based on user role (similar to EvaluationPeriods)
   useEffect(() => {
-    if (!clusters || clusters.length === 0 || selectedClusterId) return;
+    if (!user || !clusters || clusters.length === 0) return;
 
-    // For cluster leader: select their cluster
-    if (user?.role === "cluster_leader" && user.clusterId) {
-      const userCluster = clusters.find(c => c.id === user.clusterId);
-      if (userCluster) {
-        setSelectedClusterId(userCluster.id);
-        return;
+    // Check if current cluster is valid for this period
+    const currentClusterValid =
+      selectedClusterId && clusters.some((c) => c.id === selectedClusterId);
+
+    // For unit users: use their cluster from user object (if it exists in period)
+    if (user.role === "user" && user.clusterId) {
+      const userClusterValid = clusters.some((c) => c.id === user.clusterId);
+      if (userClusterValid && selectedClusterId !== user.clusterId) {
+        setSelectedClusterId(user.clusterId);
+      } else if (!userClusterValid && !currentClusterValid) {
+        // User's cluster not in this period, select first available
+        setSelectedClusterId(clusters[0].id);
       }
+      return;
     }
 
-    // For regular user: select their unit's cluster
-    if (user?.role === "user" && userUnit?.clusterId) {
-      const unitCluster = clusters.find(c => c.id === userUnit.clusterId);
-      if (unitCluster) {
-        setSelectedClusterId(unitCluster.id);
-        return;
+    // For cluster leaders: use their cluster (if it exists in period)
+    if (user.role === "cluster_leader" && user.clusterId) {
+      const userClusterValid = clusters.some((c) => c.id === user.clusterId);
+      if (userClusterValid && selectedClusterId !== user.clusterId) {
+        setSelectedClusterId(user.clusterId);
+      } else if (!userClusterValid && !currentClusterValid) {
+        // User's cluster not in this period, select first available
+        setSelectedClusterId(clusters[0].id);
       }
+      return;
     }
 
-    // For admin or if no match found: select first cluster
-    if (user?.role === "admin" || !selectedClusterId) {
+    // For admin: auto-select first cluster if current selection is invalid
+    if (user.role === "admin" && !currentClusterValid) {
       setSelectedClusterId(clusters[0].id);
     }
-  }, [clusters, user, userUnit, selectedClusterId]);
+  }, [user, clusters, selectedClusterId]);
 
   // Fetch summary report
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
