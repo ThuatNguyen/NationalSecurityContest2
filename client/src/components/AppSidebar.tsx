@@ -115,6 +115,13 @@ export const SETTINGS_NAV_ITEMS: NavItem[] = [
     allowedRoles: ["admin", "cluster_leader"]
   },
   { 
+    title: "Gán tiêu chí cho đơn vị", 
+    url: "/settings/criteria-assignment", 
+    icon: ClipboardList, 
+    testId: "nav-criteria-assignment",
+    allowedRoles: ["admin", "cluster_leader"]
+  },
+  { 
     title: "Quản lý người dùng", 
     url: "/settings/users", 
     icon: Users, 

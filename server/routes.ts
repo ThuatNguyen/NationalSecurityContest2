@@ -20,6 +20,7 @@ import {
   insertCriteriaSchema,
   insertEvaluationPeriodSchema,
   insertEvaluationSchema,
+  criteriaResults,
   type User 
 } from "@shared/schema";
 import { z } from "zod";
@@ -902,17 +903,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const criteriaData = insertCriteriaSchema.parse(req.body);
       
-      // Verify the group belongs to the user's cluster
-      const group = await storage.getCriteriaGroup(criteriaData.groupId);
-      if (!group) {
-        return res.status(404).json({ message: "Không tìm thấy nhóm tiêu chí" });
-      }
-      
-      if (req.user!.role === "cluster_leader" && group.clusterId !== req.user!.clusterId) {
+      // Verify cluster access
+      if (req.user!.role === "cluster_leader" && criteriaData.clusterId !== req.user!.clusterId) {
         return res.status(403).json({ message: "Bạn chỉ có thể tạo tiêu chí cho cụm của mình" });
       }
       
       const criteria = await storage.createCriteria(criteriaData);
+      
+      // Auto-create criteriaResults for all units in the cluster and period (only for leaf criteria)
+      if (criteriaData.periodId && criteriaData.clusterId && criteriaData.criteriaType > 0) {
+        const units = await db.select()
+          .from(schema.units)
+          .where(eq(schema.units.clusterId, criteriaData.clusterId));
+        
+        // Create criteria results for each unit with isAssigned=true by default
+        const createPromises = units.map(unit => 
+          db.insert(criteriaResults).values({
+            criteriaId: criteria.id,
+            unitId: unit.id,
+            periodId: criteriaData.periodId!,
+            isAssigned: true, // Mặc định được giao
+            status: "draft"
+          }).onConflictDoNothing() // Avoid duplicate if already exists
+        );
+        
+        await Promise.all(createPromises);
+      }
+      
       res.json(criteria);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1903,6 +1920,201 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const result = await storage.upsertCriteriaResult(resultData);
       res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dữ liệu không hợp lệ", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  // Get criteria assignment matrix for a period and cluster
+  app.get("/api/criteria-assignments", requireRole("admin", "cluster_leader"), async (req, res, next) => {
+    try {
+      const { periodId, clusterId } = z.object({
+        periodId: z.string(),
+        clusterId: z.string().optional()
+      }).parse(req.query);
+      
+      let targetClusterId = clusterId;
+      
+      // Cluster leaders can only view their own cluster
+      if (req.user!.role === "cluster_leader") {
+        if (!req.user!.clusterId) {
+          return res.status(403).json({ message: "Bạn không thuộc cụm nào" });
+        }
+        targetClusterId = req.user!.clusterId;
+      }
+      
+      if (!targetClusterId) {
+        return res.status(400).json({ message: "Vui lòng chọn cụm" });
+      }
+      
+      // Get all criteria for this period AND cluster with tree structure
+      const allCriteria = await db.select()
+        .from(schema.criteria)
+        .where(
+          and(
+            eq(schema.criteria.periodId, periodId),
+            eq(schema.criteria.clusterId, targetClusterId)
+          )
+        )
+        .orderBy(schema.criteria.orderIndex);
+      
+      // Get all units in cluster
+      const units = await db.select()
+        .from(schema.units)
+        .where(eq(schema.units.clusterId, targetClusterId));
+      
+      if (units.length === 0) {
+        return res.json({ criteria: allCriteria, units: [], matrix: {} });
+      }
+      
+      // Get all criteria results for this period and cluster
+      const results = await db.select()
+        .from(criteriaResults)
+        .where(
+          and(
+            eq(criteriaResults.periodId, periodId),
+            inArray(criteriaResults.unitId, units.map((u: any) => u.id))
+          )
+        );
+      
+      // Build matrix: { criteriaId: { unitId: { id, isAssigned } } }
+      const matrix: Record<string, Record<string, { id: string; isAssigned: boolean }>> = {};
+      
+      results.forEach(result => {
+        if (!matrix[result.criteriaId]) {
+          matrix[result.criteriaId] = {};
+        }
+        matrix[result.criteriaId][result.unitId] = {
+          id: result.id,
+          isAssigned: result.isAssigned ?? true
+        };
+      });
+      
+      // Auto-create missing criteriaResults for leaf criteria (criteriaType > 0)
+      const leafCriteria = allCriteria.filter(c => c.criteriaType > 0);
+      const missingResults: any[] = [];
+      
+      for (const criteria of leafCriteria) {
+        for (const unit of units) {
+          if (!matrix[criteria.id]?.[unit.id]) {
+            missingResults.push({
+              criteriaId: criteria.id,
+              unitId: unit.id,
+              periodId: periodId,
+              isAssigned: true, // Default to assigned
+              status: "draft"
+            });
+          }
+        }
+      }
+      
+      // Insert missing results in batch
+      if (missingResults.length > 0) {
+        const inserted = await db.insert(criteriaResults)
+          .values(missingResults)
+          .onConflictDoNothing()
+          .returning();
+        
+        // Add newly created results to matrix
+        inserted.forEach(result => {
+          if (!matrix[result.criteriaId]) {
+            matrix[result.criteriaId] = {};
+          }
+          matrix[result.criteriaId][result.unitId] = {
+            id: result.id,
+            isAssigned: result.isAssigned ?? true
+          };
+        });
+      }
+      
+      res.json({
+        criteria: allCriteria,
+        units,
+        matrix
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dữ liệu không hợp lệ", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  // Update isAssigned status for a criteria result (Admin/Cluster leader only)
+  app.patch("/api/criteria-results/:id/assign", requireRole("admin", "cluster_leader"), async (req, res, next) => {
+    try {
+      const { isAssigned } = z.object({
+        isAssigned: z.boolean()
+      }).parse(req.body);
+      
+      // Get the criteria result
+      const result = await db.select()
+        .from(criteriaResults)
+        .where(eq(criteriaResults.id, req.params.id))
+        .limit(1);
+      
+      if (result.length === 0) {
+        return res.status(404).json({ message: "Không tìm thấy kết quả tiêu chí" });
+      }
+      
+      const criteriaResult = result[0];
+      
+      // Get unit to check cluster
+      const unit = await storage.getUnit(criteriaResult.unitId);
+      if (!unit) {
+        return res.status(404).json({ message: "Không tìm thấy đơn vị" });
+      }
+      
+      // Cluster leaders can only update their own cluster's results
+      if (req.user!.role === "cluster_leader" && unit.clusterId !== req.user!.clusterId) {
+        return res.status(403).json({ message: "Bạn chỉ có thể cập nhật tiêu chí của cụm mình" });
+      }
+      
+      // Update isAssigned status
+      const updated = await db.update(criteriaResults)
+        .set({ 
+          isAssigned,
+          updatedAt: new Date()
+        })
+        .where(eq(criteriaResults.id, req.params.id))
+        .returning();
+      
+      res.json(updated[0]);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Dữ liệu không hợp lệ", errors: error.errors });
+      }
+      next(error);
+    }
+  });
+  
+  // Batch update isAssigned status
+  app.patch("/api/criteria-assignments/batch", requireRole("admin", "cluster_leader"), async (req, res, next) => {
+    try {
+      const { updates } = z.object({
+        updates: z.array(z.object({
+          id: z.string(),
+          isAssigned: z.boolean()
+        }))
+      }).parse(req.body);
+      
+      // Update all in transaction
+      const results = await Promise.all(
+        updates.map(update =>
+          db.update(criteriaResults)
+            .set({ 
+              isAssigned: update.isAssigned,
+              updatedAt: new Date()
+            })
+            .where(eq(criteriaResults.id, update.id))
+            .returning()
+        )
+      );
+      
+      res.json({ updated: results.flat().length });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Dữ liệu không hợp lệ", errors: error.errors });
